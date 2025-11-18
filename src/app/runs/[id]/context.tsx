@@ -39,7 +39,7 @@ interface LiveRunProviderProps {
 export function LiveRunProvider({ children, adapter, initialState, videoRef }: LiveRunProviderProps) {
   const [state, setState] = useState<LiveRunState>(initialState)
   const [highlightedEventId, setHighlightedEventId] = useState<string>()
-  const adapterRef = useRef<{ stop: () => void }>()
+  const adapterRef = useRef<{ stop: () => void } | null>(null)
 
   useEffect(() => {
     const emitHandlers = {

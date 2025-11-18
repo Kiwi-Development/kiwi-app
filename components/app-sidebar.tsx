@@ -38,16 +38,14 @@ export function AppSidebar() {
 
   return (
     <div className="hidden md:flex h-screen w-64 flex-col border-r border-border bg-background/95">
-      <div className="flex h-16 items-center px-6">
+      <div className="flex h-20 items-center px-6">
         <Link href="/" className="flex items-center gap-2">
           <Image
-            src="/placeholder-logo.png"
+            src="/kiwilogo.png"
             alt="Kiwi Logo"
-            width={32}
-            height={32}
-            className="rounded-lg"
+            width={90}
+            height={90}
           />
-          <span className="text-xl font-bold">Kiwi</span>
         </Link>
       </div>
 
