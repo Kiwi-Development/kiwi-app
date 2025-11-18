@@ -146,14 +146,28 @@ export default function NewTestPage() {
   }
 
   const handleRunSimulation = () => {
-    if (selectedPersonas.length === 0) {
-      toast({
-        title: "Error",
-        description: "Please select at least one persona",
-        variant: "destructive",
-      })
-      return
-    }
+  //   if (selectedPersonas.length === 0) {
+  //     toast({
+  //       title: "Error",
+  //       description: "Please select at least one persona",
+  //       variant: "destructive",
+  //     })
+  //     return
+  //   }
+
+  // const selectedPersonaDetails = personaStore.getPersonas()
+  //   .filter(p => selectedPersonas.includes(p.id))
+  //   .map(p => p.name)
+
+  //   if (selectedPersonaDetails.length === 0) {
+  //     toast({
+  //       title: "Error",
+  //       description: "No valid personas selected",
+  //       variant: "destructive",
+  //     })
+  //     return
+  //   }
+
     const newTest = {
       id: Date.now().toString(),
       title: testName,
