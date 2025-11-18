@@ -1,6 +1,6 @@
 "use client"
 
-import { AppHeader } from "../../../../components/app-header"
+import { AppLayout } from "../../../../components/app-layout"
 import { Button } from "../../../../components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../../components/ui/card"
 import { Badge } from "../../../../components/ui/badge"
@@ -8,12 +8,31 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components
 import { Textarea } from "../../../../components/ui/textarea"
 import { useToast } from "../../../../hooks/use-toast"
 import { Share2, FileDown, Play, CheckCircle2, XCircle, TrendingUp, RotateCcw, Target, X } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useParams } from "next/navigation"
 import { testStore } from "../../../../lib/test-store"
-import { Dialog, DialogContent } from "../../../../components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/dialog"
+import { Slider } from "../../../../components/ui/slider"
+import { ReplayPlayer } from "../../runs/[id]/components/replay-player"
 
-const findings = [
+type ValidationStatus = 'validated' | 'refuted' | null;
+
+interface Finding {
+  id: number;
+  title: string;
+  severity: string;
+  confidence: number;
+  ood: boolean;
+  timestamp: string;
+  description: string;
+  suggestedFix: string;
+  affectingTasks: string[];
+  affectingPersonas: string[];
+  validated: ValidationStatus;
+  note: string;
+}
+
+const findings: Finding[] = [
   {
     id: 1,
     title: "Grid view switcher lacks visual feedback",
@@ -62,7 +81,7 @@ const findings = [
 export default function ReportPage() {
   const params = useParams()
   const testId = params.id as string
-  const [findingStates, setFindingStates] = useState(findings)
+  const [findingStates, setFindingStates] = useState<Finding[]>(findings)
   const [variant, setVariant] = useState<"A" | "B">("A")
   const [videoDialogOpen, setVideoDialogOpen] = useState(false)
   const [selectedTimestamp, setSelectedTimestamp] = useState("")
@@ -81,7 +100,6 @@ export default function ReportPage() {
         taskSuccess: 0,
         avgTime: "0:00",
         backtracks: 0,
-        oodEvents: 0,
       }
     }
 
@@ -90,14 +108,12 @@ export default function ReportPage() {
         taskSuccess: 72,
         avgTime: "4:32",
         backtracks: 8,
-        oodEvents: 1,
       }
     } else {
       return {
         taskSuccess: 89,
         avgTime: "3:16",
         backtracks: 3,
-        oodEvents: 0,
       }
     }
   }
@@ -143,16 +159,173 @@ export default function ReportPage() {
     })
   }
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const [volume, setVolume] = useState(0.5);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+
+  const handleVolumeChange = (value: number[]) => {
+    const newVolume = value[0];
+    setVolume(newVolume);
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume;
+      setIsMuted(newVolume === 0);
+    }
+  };
+
+  // Convert timestamp to seconds
+  const getTimeInSeconds = useCallback((timestamp: string) => {
+    const [minutes, seconds] = timestamp.split(':').map(Number);
+    return (minutes * 60) + seconds;
+  }, []);
+
+  const handleCanPlay = useCallback(() => {
+      if (selectedTimestamp && videoRef.current) {
+        const timeInSeconds = getTimeInSeconds(selectedTimestamp);
+        videoRef.current.currentTime = timeInSeconds;
+        videoRef.current.muted = true; // Mute for autoplay
+        videoRef.current.play().catch(e => {
+          console.log("Autoplay blocked, user interaction required");
+        });
+      }
+    }, [selectedTimestamp, getTimeInSeconds]);
+
+  // Handle video events
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('play', () => setIsPlaying(true));
+    video.addEventListener('pause', () => setIsPlaying(false));
+    video.addEventListener('timeupdate', () => setCurrentTime(video.currentTime));
+    video.addEventListener('durationchange', () => setDuration(video.duration));
+    video.addEventListener('seeking', () => setIsPlaying(false));
+    video.addEventListener('seeked', () => {
+      if (!video.paused) {
+        video.play().catch(console.error);
+      }
+    });
+
+    // Initial setup
+    if (selectedTimestamp) {
+    const timeInSeconds = getTimeInSeconds(selectedTimestamp);
+      if (video.readyState >= 2) {
+        video.currentTime = timeInSeconds;
+        video.muted = true;
+        video.play().catch(console.error);
+      }
+    }
+
+    return () => {
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('play', () => {});
+      video.removeEventListener('pause', () => {});
+      video.removeEventListener('timeupdate', () => {});
+      video.removeEventListener('durationchange', () => {});
+      video.removeEventListener('seeking', () => {});
+      video.removeEventListener('seeked', () => {});
+    };
+  }, [handleCanPlay, selectedTimestamp, getTimeInSeconds]);
+
+  // Handle fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // Player controls
+  const togglePlay = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.paused) {
+      video.play().catch(e => {
+        // If autoplay was prevented, mute and try again
+        video.muted = true;
+        video.play().catch(console.error);
+      });
+    } else {
+      video.pause();
+    }
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      videoRef.current?.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  const handleSeek = (value: number[]) => {
+    const video = videoRef.current;
+    if (video) {
+      video.currentTime = value[0];
+    }
+  };
+
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
   const handleJumpToProof = (timestamp: string) => {
-    setSelectedTimestamp(timestamp)
-    setVideoDialogOpen(true)
+    setSelectedTimestamp(timestamp);
+    setVideoDialogOpen(true);
   }
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !selectedTimestamp) return;
+
+    const seekToTime = () => {
+      const timeInSeconds = getTimeInSeconds(selectedTimestamp);
+      if (isFinite(timeInSeconds)) {
+        video.currentTime = timeInSeconds;
+        video.muted = true;
+        setCurrentTime(timeInSeconds);
+        video.play().catch(e => {
+          console.log("Autoplay blocked, user interaction required");
+        });
+      }
+    };
+
+    // Try to seek immediately if possible
+    if (video.readyState >= 2) {
+      seekToTime();
+    }
+
+    // Also set up the canplay event as a fallback
+    const handleCanPlay = () => {
+      seekToTime();
+      video.removeEventListener('canplay', handleCanPlay);
+    };
+
+    video.addEventListener('canplay', handleCanPlay);
+    return () => {
+      video.removeEventListener('canplay', handleCanPlay);
+    };
+  }, [selectedTimestamp, getTimeInSeconds]);
 
   const currentMetrics = variant === "A" ? metricsA : metricsB
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppLayout>
 
       <main className="container mx-auto p-6 space-y-8">
         <div className="flex items-start justify-between">
@@ -188,8 +361,8 @@ export default function ReportPage() {
           </TabsList>
 
           <TabsContent value={variant} className="space-y-6 mt-6">
-            <div className="grid gap-6 md:grid-cols-4">
-              <Card>
+            <div className="grid gap-6 md:grid-cols-3">
+              <Card className="w-full">
                 <CardHeader className="pb-3">
                   <CardDescription>Task Success</CardDescription>
                 </CardHeader>
@@ -197,7 +370,7 @@ export default function ReportPage() {
                   <div className="text-3xl font-bold">{currentMetrics.taskSuccess}%</div>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="w-full">
                 <CardHeader className="pb-3">
                   <CardDescription>Avg Time</CardDescription>
                 </CardHeader>
@@ -205,20 +378,12 @@ export default function ReportPage() {
                   <div className="text-3xl font-bold">{currentMetrics.avgTime}</div>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="w-full">
                 <CardHeader className="pb-3">
                   <CardDescription>Backtracks</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold">{currentMetrics.backtracks}</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardDescription>OOD Events</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{currentMetrics.oodEvents}</div>
                 </CardContent>
               </Card>
             </div>
@@ -230,13 +395,6 @@ export default function ReportPage() {
 
               {findingStates.map((finding) => (
                 <Card key={finding.id} className="relative">
-                  {finding.ood && (
-                    <div className="absolute top-4 right-4">
-                      <Badge variant="outline" className="bg-accent/10">
-                        OOD
-                      </Badge>
-                    </div>
-                  )}
                   <CardHeader>
                     <div className="flex items-start gap-4">
                       <div className="flex-1 space-y-2">
@@ -441,29 +599,27 @@ export default function ReportPage() {
       </main>
 
       <Dialog open={videoDialogOpen} onOpenChange={setVideoDialogOpen}>
-        <DialogContent className="max-w-5xl p-0 bg-black/90 border-0">
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white"
-              onClick={() => setVideoDialogOpen(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-            <video
-              src="/demo-usability-test.mp4"
-              controls
-              autoPlay
-              className="w-full h-auto"
-              style={{ maxHeight: "80vh" }}
+        <DialogContent className="max-w-6xl p-0 bg-black/90 border-0">
+          <DialogTitle className="sr-only">Video Player</DialogTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white"
+            onClick={() => setVideoDialogOpen(false)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+          <div className="p-4">
+            <ReplayPlayer
+              videoUrl="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/test_video-UOVNF3qfZLAN4grybvKaejGMEHvvPG.mp4"
+              events={[]}
+              initialTime={selectedTimestamp ? getTimeInSeconds(selectedTimestamp) : 0}
+              onSeek={(time) => setSelectedTimestamp(time.toString())}
             />
-            <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1.5 rounded text-white text-sm">
-              Playing from {selectedTimestamp}
-            </div>
           </div>
         </DialogContent>
       </Dialog>
+    </AppLayout>
     </div>
   )
 }

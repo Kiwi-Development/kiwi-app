@@ -324,12 +324,6 @@ export const ReplayPlayer = forwardRef<HTMLVideoElement, ReplayPlayerProps>(
             </div>
           </div>
         </div>
-
-        <div className="flex items-center justify-center">
-          <Badge variant="outline" className="text-xs">
-            Simulated think-aloud (AI)
-          </Badge>
-        </div>
       </div>
     )
   },

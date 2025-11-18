@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useEffect, useState } from "react"
-import { AppHeader } from "../../../components/app-header"
+import { AppLayout } from "../../../components/app-layout"
 import { Button } from "../../../components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs"
@@ -133,7 +133,7 @@ export default function TestsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppLayout>
 
       <main className="container mx-auto p-6 space-y-8">
         <div className="flex items-center justify-between">
@@ -267,6 +267,7 @@ export default function TestsPage() {
           </AlertDialogContent>
         </AlertDialog>
       </main>
+    </AppLayout>  
     </div>
   )
 }

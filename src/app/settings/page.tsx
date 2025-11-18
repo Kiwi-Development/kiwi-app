@@ -1,6 +1,6 @@
 "use client"
 
-import { AppHeader } from "../../../components/app-header"
+import { AppLayout } from "../../../components/app-layout"
 import { Button } from "../../../components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Switch } from "../../../components/ui/switch"
@@ -28,8 +28,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppHeader />
+    <AppLayout>
 
       <main className="container mx-auto p-6 max-w-4xl space-y-8">
         <div>
@@ -166,6 +165,6 @@ export default function SettingsPage() {
           </Card>
         </div>
       </main>
-    </div>
+    </AppLayout>
   )
 }

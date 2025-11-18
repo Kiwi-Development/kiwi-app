@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { useSearchParams, useParams, useRouter } from "next/navigation"
-import { AppHeader } from "../../../../components/app-header"
+import { AppLayout } from "../../../../components/app-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../../components/ui/card"
 import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
@@ -195,7 +195,7 @@ export default function LiveRunPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppLayout>
 
       <main className="container mx-auto p-6">
         <div className="space-y-6">
@@ -285,6 +285,7 @@ export default function LiveRunPage() {
           </Card>
         </div>
       </main>
+    </AppLayout>
     </div>
   )
 }

@@ -42,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="light">
       <body className={`${satoshi.variable} font-sans antialiased`}>
         <main>{children}</main>
       </body>

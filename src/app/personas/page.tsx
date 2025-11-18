@@ -1,39 +1,31 @@
 "use client"
 
-import { useState } from "react"
-import { AppHeader } from "../../../components/app-header"
+import { useState, useEffect } from "react"
+import { AppLayout } from "../../../components/app-layout"
 import { Button } from "../../../components/ui/button"
 import { Card, CardContent } from "../../../components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table"
 import { Badge } from "../../../components/ui/badge"
-import { Plus } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../../../components/ui/dialog"
+import { Plus, Trash2 } from "lucide-react"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../../../components/ui/dialog"
 import { useToast } from "../../../hooks/use-toast"
-
-const personas = [
-  {
-    name: "Jenny Park",
-    role: "Product Manager",
-    tags: ["Non-technical", "Time-pressed", "Keyboard-friendly"],
-    lastUsed: "2 hours ago",
-  },
-]
+import { personaStore, type Persona } from "../../../lib/persona-store"
 
 export default function PersonasPage() {
+  const [personas, setPersonas] = useState<Persona[]>([])
   const [personaDialogOpen, setPersonaDialogOpen] = useState(false)
+  const [editingPersona, setEditingPersona] = useState<Persona | null>(null)
   const [newPersonaName, setNewPersonaName] = useState("")
   const [newPersonaRole, setNewPersonaRole] = useState("")
   const [newPersonaTags, setNewPersonaTags] = useState<string[]>([])
   const { toast } = useToast()
+
+  useEffect(() => {
+    const storedPersonas = personaStore.getPersonas()
+    setPersonas(storedPersonas)
+  }, [])
 
   const availableTags = [
     "Non-technical",
@@ -56,15 +48,46 @@ export default function PersonasPage() {
       return
     }
 
-    toast({
-      title: "Persona created",
-      description: `${newPersonaName} has been added to your personas`,
-    })
+    if (editingPersona) {
+      const updated = personaStore.updatePersona(editingPersona.id, {
+        name: newPersonaName,
+        role: newPersonaRole,
+        tags: newPersonaTags,
+      })
+      setPersonas(personaStore.getPersonas())
+      toast({
+        title: "Persona updated",
+        description: `${newPersonaName} has been updated`,
+      })
+    } else {
+      const newPersona = personaStore.addPersona({
+        name: newPersonaName,
+        role: newPersonaRole,
+        tags: newPersonaTags,
+      })
+      setPersonas([...personas, newPersona])
+      toast({
+        title: "Persona created",
+        description: `${newPersonaName} has been added to your personas`,
+      })
+    }
 
+    // Reset form
     setPersonaDialogOpen(false)
     setNewPersonaName("")
     setNewPersonaRole("")
     setNewPersonaTags([])
+    setEditingPersona(null)
+
+    setPersonas(personaStore.getPersonas())
+  }
+
+  const handleEditPersona = (persona: Persona) => {
+    setEditingPersona(persona)
+    setNewPersonaName(persona.name)
+    setNewPersonaRole(persona.role)
+    setNewPersonaTags([...persona.tags])
+    setPersonaDialogOpen(true)
   }
 
   const toggleTag = (tag: string) => {
@@ -73,7 +96,7 @@ export default function PersonasPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppLayout>
 
       <main className="container mx-auto p-6 space-y-8">
         <div className="flex items-center justify-between">
@@ -81,7 +104,15 @@ export default function PersonasPage() {
             <h1 className="text-3xl font-bold tracking-tight">Personas</h1>
             <p className="text-muted-foreground mt-2">Manage your testing personas and their variants</p>
           </div>
-          <Dialog open={personaDialogOpen} onOpenChange={setPersonaDialogOpen}>
+          <Dialog open={personaDialogOpen} onOpenChange={(open) => {
+            setPersonaDialogOpen(open)
+            if (!open) {
+              setNewPersonaName("")
+              setNewPersonaRole("")
+              setNewPersonaTags([])
+              setEditingPersona(null)
+            }
+          }}>
             <DialogTrigger asChild>
               <Button size="lg">
                 <Plus className="h-4 w-4 mr-2" />
@@ -90,7 +121,7 @@ export default function PersonasPage() {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[525px]">
               <DialogHeader>
-                <DialogTitle>Create New Persona</DialogTitle>
+                <DialogTitle>{editingPersona ? 'Edit Persona' : 'Create New Persona'}</DialogTitle>
                 <DialogDescription>
                   Add a new user persona for testing. Personas help simulate different user behaviors.
                 </DialogDescription>
@@ -135,31 +166,31 @@ export default function PersonasPage() {
                 <Button variant="outline" onClick={() => setPersonaDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleSavePersona}>Create Persona</Button>
+                <Button onClick={handleSavePersona}>{editingPersona ? 'Update Persona' : 'Create Persona'}</Button>
               </div>
             </DialogContent>
           </Dialog>
         </div>
 
         <Card>
-          <CardContent className="p-0">
+          <CardContent className="px-6">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Tags</TableHead>
-                  <TableHead>Last Used</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-[120px]">Last Used</TableHead>
+                  <TableHead className="pl-4.5 text-left">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {personas.map((persona, index) => (
-                  <TableRow key={index}>
+                  <TableRow key={index} className="group">
                     <TableCell className="font-medium">{persona.name}</TableCell>
                     <TableCell>{persona.role}</TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {persona.tags.map((tag) => (
                           <Badge key={tag} variant="outline" className="text-xs">
                             {tag}
@@ -168,10 +199,37 @@ export default function PersonasPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{persona.lastUsed}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
-                        Edit
-                      </Button>
+                    <TableCell className="text-left">
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleEditPersona(persona)
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            personaStore.deletePersona(persona.id)
+                            setPersonas(personaStore.getPersonas())
+                            toast({
+                              title: "Persona deleted",
+                              description: `${persona.name} has been removed`,
+                            })
+                          }}
+                          aria-label="Delete persona"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -180,6 +238,7 @@ export default function PersonasPage() {
           </CardContent>
         </Card>
       </main>
+    </AppLayout>
     </div>
   )
 }
