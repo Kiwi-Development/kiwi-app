@@ -11,12 +11,14 @@ const statusColors: Record<string, string> = {
   queued: "bg-slate-500",
   running: "bg-blue-500",
   completed: "bg-green-500",
+  error: "bg-red-500",
 }
 
 const statusLabels: Record<string, string> = {
   queued: "Queued",
   running: "Running",
   completed: "Completed",
+  error: "Error",
 }
 
 export function PersonaProgressList({ personas }: PersonaProgressListProps) {

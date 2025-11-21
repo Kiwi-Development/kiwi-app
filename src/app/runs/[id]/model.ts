@@ -16,7 +16,7 @@ export type PersonaProgress = {
   id: string
   name: string // e.g., "Jenny"
   variant: string // e.g., "Novice"
-  status: "queued" | "running" | "completed"
+  status: "queued" | "running" | "completed" | "error"
   percent: number // 0–100
 }
 

@@ -39,10 +39,12 @@ export function LiveLog({ logs, startTime = Date.now() }: LiveLogProps) {
     }
   }
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp)
+    const hours = date.getHours().toString().padStart(2, "0")
+    const mins = date.getMinutes().toString().padStart(2, "0")
+    const secs = date.getSeconds().toString().padStart(2, "0")
+    return `${hours}:${mins}:${secs}`
   }
 
   return (

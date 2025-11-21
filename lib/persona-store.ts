@@ -3,6 +3,11 @@ export type Persona = {
   name: string
   role: string
   tags: string[]
+  goals: string[]
+  behaviors: string[]
+  frustrations: string[]
+  constraints: string[]
+  accessibility: string[]
   lastUsed: string
 }
 
@@ -23,6 +28,11 @@ class PersonaStore {
         name: "Alex Chen",
         role: "Marketing Manager",
         tags: ["Non-technical", "Time-pressed"],
+        goals: ["Create campaigns quickly", "Analyze performance metrics"],
+        behaviors: ["Skims content", "Uses keyboard shortcuts"],
+        frustrations: ["Slow loading times", "Complex navigation"],
+        constraints: ["Limited technical knowledge", "Tight deadlines"],
+        accessibility: ["Prefers high contrast"],
         lastUsed: "2 hours ago"
       },
       {
@@ -30,6 +40,11 @@ class PersonaStore {
         name: "Taylor Smith",
         role: "UX Designer",
         tags: ["Expert user", "Mobile-first"],
+        goals: ["Validate design patterns", "Check responsiveness"],
+        behaviors: ["Detailed inspection", "Uses developer tools"],
+        frustrations: ["Inconsistent UI", "Lack of customization"],
+        constraints: ["Mobile-only access sometimes"],
+        accessibility: [],
         lastUsed: "1 day ago"
       }
     ]

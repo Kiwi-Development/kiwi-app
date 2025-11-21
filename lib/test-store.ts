@@ -13,7 +13,7 @@ type Test = {
     goal: string
     environment: string
     piiRedaction: boolean
-    selectedPersona: string
+    selectedPersonas: string[]
     useCase: string
     tasks: string[]
     figmaUrlA?: string
