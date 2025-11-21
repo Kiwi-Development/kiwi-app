@@ -16,6 +16,7 @@ import type { LiveRunState, RunEvent } from "./model"
 import { useToast } from "../../../../hooks/use-toast"
 import { testStore } from "../../../../lib/test-store"
 import { personaStore } from "../../../../lib/persona-store"
+import { getTaskServerUrl } from "../../actions"
 
 const statusColors: Record<string, string> = {
   queued: "bg-slate-500 text-slate-50",
@@ -176,6 +177,8 @@ export default function LiveRunPage() {
       if (!serverUrl) {
         const taskArn = taskData.taskArn
         const cluster = taskData.cluster
+        console.log("Task ARN:", taskArn)
+        console.log("Cluster:", cluster) 
         
         setState(prev => ({
           ...prev,
@@ -191,35 +194,14 @@ export default function LiveRunPage() {
         while (!serverUrl && pollAttempt < maxPollAttempts) {
           await new Promise(r => setTimeout(r, 2000))
           pollAttempt++
-          
-          setState(prev => ({
-            ...prev,
-            logs: [...prev.logs, { 
-              t: Date.now(), 
-              text: `Checking for IP address (attempt ${pollAttempt}/${maxPollAttempts})...` 
-            }]
-          }))
 
           try {
-            const pollRes = await fetch(lambdaUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
-                environment: {
-                  URL: figmaUrl
-                }
-              })
-            })
-
-            if (pollRes.ok) {
-              const pollText = await pollRes.text()
-              const pollData = JSON.parse(pollText)
-              serverUrl = pollData.serverUrl || pollData.publicUrl
-              
-              if (serverUrl) {
-                console.log("Got server URL:", serverUrl)
-                break
-              }
+            console.log("Calling getTaskServerUrl with:", taskArn, cluster)
+            const url = await getTaskServerUrl(taskArn, cluster)
+            if (url) {
+              serverUrl = url
+              console.log("Got server URL:", serverUrl)
+              break
             }
           } catch (pollError) {
             console.log("Poll attempt failed:", pollError)
@@ -412,7 +394,7 @@ export default function LiveRunPage() {
           setAgentHistory(prev => [...prev, decision.message])
         }
 
-        await new Promise(r => setTimeout(r, 3000))
+        await new Promise(r => setTimeout(r, 2000))
       }
     } catch (e) {
       console.error("Simulation error:", e)
