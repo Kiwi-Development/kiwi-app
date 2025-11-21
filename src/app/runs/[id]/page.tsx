@@ -17,6 +17,7 @@ import { useToast } from "../../../../hooks/use-toast"
 import { testStore } from "../../../../lib/test-store"
 import { personaStore } from "../../../../lib/persona-store"
 import { getTaskServerUrl } from "../../actions"
+import { proxyScreenshot, proxyClick } from "../../proxy-actions"
 
 const statusColors: Record<string, string> = {
   queued: "bg-slate-500 text-slate-50",
@@ -234,12 +235,9 @@ export default function LiveRunPage() {
         await new Promise(r => setTimeout(r, 2000))
         
         try {
-          const healthCheck = await fetch(`${serverUrl}/screenshot`, { 
-            method: "POST",
-            signal: AbortSignal.timeout(5000)
-          })
+          const healthCheck = await proxyScreenshot(serverUrl)
           
-          if (healthCheck.ok) {
+          if (healthCheck.status === "ok") {
             serverReady = true
             console.log("Server is ready!")
             break
@@ -323,8 +321,7 @@ export default function LiveRunPage() {
     // Main simulation loop
     try {
       while (simulationRef.current && currentProgress < 100) {
-        const screenshotRes = await fetch(`${serverUrl}/screenshot`, { method: "POST" })
-        const screenshotData = await screenshotRes.json()
+        const screenshotData = await proxyScreenshot(serverUrl)
         
         if (screenshotData.status === "error" || !screenshotData.screenshot) {
           console.error("Failed to get screenshot:", screenshotData.message)
@@ -368,11 +365,7 @@ export default function LiveRunPage() {
                 logs: [...prev.logs, { t: Date.now(), text: `Agent: ${args.rationale}` }]
               }))
 
-              await fetch(`${serverUrl}/click`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ x: args.x, y: args.y }),
-              })
+              await proxyClick(serverUrl, args.x, args.y)
             }
           }
           
