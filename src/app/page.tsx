@@ -1,18 +1,132 @@
 import { Button } from "../../components/ui/button"
-import Link from 'next/link'
+import { Input } from "../../components/ui/input"
+import { Badge } from "../../components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar"
+import { MousePointer2 } from "lucide-react"
+import Link from "next/link"
+import Image from "next/image"
+
+function Logo() {
+  return (
+    <div className="flex items-center gap-3">
+      <Image
+        src="/kiwilogo.png"
+        alt="Kiwi Logo"
+        width={0}
+        height={0}
+        sizes="70vw"
+        className="w-full h-auto"
+      />
+    </div>
+  )
+}
+
+function Cursor({
+  text,
+  color = "bg-[#F34822]",
+  className,
+  flipped = false,
+}: {
+  text: string
+  color?: string
+  className?: string
+  flipped?: boolean
+}) {
+  return (
+    <div className={`absolute flex items-start gap-2 ${className} pointer-events-none z-20`}>
+      <MousePointer2
+        className={`h-5 w-5 ${flipped ? "-scale-x-100" : ""} fill-black text-black`}
+      />
+      <div
+        className={`${color} text-white px-3 py-1.5 rounded-full rounded-tl-none text-sm font-medium shadow-lg ${flipped ? "rounded-tr-none rounded-tl-full" : ""
+          }`}
+      >
+        {text}
+      </div>
+    </div>
+  )
+}
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4">
-      <div className="text-center space-y-8 max-w-3xl mx-auto">
-        <h1 className="text-5xl font-bold mb-6">Welcome to Kiwi</h1>
-        <p className="text-2xl text-muted-foreground mb-8">
-          AI-Native Usability Testing Platform
-        </p>
-        <Button asChild size="lg">
-          <Link href="/tests">Get Started</Link>
+    <main className="min-h-screen bg-background bg-grid-pattern relative overflow-hidden font-sans">
+      {/* Header */}
+      <header className="flex justify-between items-center p-6 max-w-7xl mx-auto w-full relative z-10">
+        <Logo />
+        <Button className="bg-[#F34822] hover:bg-[#F34822]/90 text-white rounded-full px-6 font-medium">
+          Book a Demo
         </Button>
+      </header>
+
+      {/* Hero Section */}
+      <div className="flex flex-col items-center justify-center pt-12 pb-24 px-4 text-center relative max-w-5xl mx-auto z-10">
+        <Badge variant="secondary" className="mb-8 px-4 py-1.5 rounded-full text-sm font-normal bg-white border shadow-sm hover:bg-white">
+          Coming Soon
+        </Badge>
+
+        <h1 className="text-5xl md:text-7xl font-serif tracking-tight text-foreground mb-8 leading-[1.1]">
+          Get Feedback on Designs
+          <br />
+          in <span className="text-[#F34822] italic">Minutes</span>, Not Weeks
+        </h1>
+
+        {/* Email Input */}
+        <div className="w-full max-w-md relative mb-12">
+          <Input
+            type="email"
+            placeholder="your@email.com"
+            className="h-14 pl-6 pr-36 rounded-full border-gray-200 shadow-sm text-base bg-white focus-visible:ring-[#F34822]"
+          />
+          <Button className="absolute right-1.5 top-1.5 bottom-1.5 bg-[#F34822] hover:bg-[#F34822]/90 text-white rounded-full px-6 h-auto font-medium">
+            Join Waitlist
+          </Button>
+        </div>
+
+        {/* Social Proof */}
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <div className="flex -space-x-2">
+            <Avatar className="border-2 border-white w-8 h-8">
+              <AvatarImage src="https://github.com/shadcn.png" />
+              <AvatarFallback>CN</AvatarFallback>
+            </Avatar>
+            <Avatar className="border-2 border-white w-8 h-8">
+              <AvatarImage src="https://github.com/vercel.png" />
+              <AvatarFallback>VC</AvatarFallback>
+            </Avatar>
+            <Avatar className="border-2 border-white w-8 h-8">
+              <AvatarImage src="https://github.com/nextjs.png" />
+              <AvatarFallback>NX</AvatarFallback>
+            </Avatar>
+          </div>
+          <p>20+ designers have already joined</p>
+        </div>
+
+        {/* Floating Cursors */}
+        <Cursor
+          text="Say something"
+          className="bottom-20 right-10 md:right-20 hidden md:flex"
+        />
       </div>
+
+      {/* Dashboard Preview */}
+      <div className="max-w-6xl mx-auto px-4 pb-20 relative z-10">
+        <div className="rounded-xl border bg-white shadow-2xl overflow-hidden p-2">
+          <div className="bg-gray-50 rounded-lg border border-gray-100 overflow-hidden">
+            <Image
+              src="/dashboard_hero.png"
+              alt="Dashboard Preview"
+              width={0}
+              height={0}
+              sizes="100vw"
+              className="w-full h-auto"
+              priority
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Gradient Overlay at bottom */}
+      <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-white to-transparent pointer-events-none z-0"></div>
     </main>
   )
 }
