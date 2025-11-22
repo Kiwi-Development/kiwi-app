@@ -1,3 +1,5 @@
+"use client"
+
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Badge } from "../../components/ui/badge"
@@ -5,6 +7,55 @@ import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar"
 import { MousePointer2 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
+import { toast } from "sonner"
+import { useState } from "react"
+
+function WaitlistForm() {
+  const [email, setEmail] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+
+      if (!res.ok) throw new Error("Failed to join")
+
+      toast.success("You've been added to the waitlist!")
+      setEmail("")
+    } catch (error) {
+      toast.error("Something went wrong. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="w-full max-w-md relative mb-12">
+      <Input
+        type="email"
+        placeholder="your@email.com"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+        className="h-14 pl-6 pr-36 rounded-full border-gray-200 shadow-sm text-base bg-white focus-visible:ring-[#F34822]"
+      />
+      <Button
+        type="submit"
+        disabled={loading}
+        className="absolute right-1.5 top-1.5 bottom-1.5 bg-[#F34822] hover:bg-[#F34822]/90 text-white rounded-full px-6 h-auto font-medium disabled:opacity-50"
+      >
+        {loading ? "Joining..." : "Join Waitlist"}
+      </Button>
+    </form>
+  )
+}
 
 function Logo() {
   return (
@@ -71,16 +122,7 @@ export default function Home() {
         </h1>
 
         {/* Email Input */}
-        <div className="w-full max-w-md relative mb-12">
-          <Input
-            type="email"
-            placeholder="your@email.com"
-            className="h-14 pl-6 pr-36 rounded-full border-gray-200 shadow-sm text-base bg-white focus-visible:ring-[#F34822]"
-          />
-          <Button className="absolute right-1.5 top-1.5 bottom-1.5 bg-[#F34822] hover:bg-[#F34822]/90 text-white rounded-full px-6 h-auto font-medium">
-            Join Waitlist
-          </Button>
-        </div>
+        <WaitlistForm />
 
         {/* Social Proof */}
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -109,7 +151,7 @@ export default function Home() {
       </div>
 
       {/* Dashboard Preview */}
-      <div className="max-w-6xl mx-auto px-4 pb-20 relative z-10">
+      <div className="max-w-6xl mx-auto px-4 relative z-10">
         <div className="rounded-xl border bg-white shadow-2xl overflow-hidden p-2">
           <div className="bg-gray-50 rounded-lg border border-gray-100 overflow-hidden">
             <Image
