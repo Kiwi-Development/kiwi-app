@@ -317,6 +317,45 @@ export default function LiveRunPage() {
     let currentProgress = initialProgress
     const progressIncrement = 2
     
+    // Helper to handle completion
+    const handleCompletion = (feedback?: string) => {
+        clearInterval(progressInterval)
+        
+        setState(prev => ({
+          ...prev,
+          status: "completed",
+          personas: prev.personas.map((p, idx) => 
+            idx === 0 ? { ...p, status: "completed" as const, percent: 100 } : p
+          )
+        }))
+        
+        const test = testStore.getTestById(testId)
+        if (test) {
+          test.status = "completed"
+          if (feedback) {
+            test.feedback = feedback
+          }
+          
+          // Calculate metrics
+          const endTime = Date.now()
+          test.completedAt = endTime
+          test.duration = endTime - startedAtRef.current
+          test.actionCount = stateRef.current.events.filter(e => e.type === "click").length
+          
+          testStore.saveTest(test)
+        }
+        
+        // Clear active run when completed
+        runStore.clearRun(testId)
+
+        setTimeout(() => {
+          router.push(`/reports/${testId}`)
+        }, 2000)
+        
+        simulationRef.current = false
+        setIsSimulating(false)
+    }
+
     const progressInterval = setInterval(() => {
       // FIX: Check both global flag AND specific execution ID
       if (!simulationRef.current || activeExecutionIdRef.current !== executionId) {
@@ -334,30 +373,7 @@ export default function LiveRunPage() {
       }))
       
       if (currentProgress >= 100) {
-        clearInterval(progressInterval)
-        
-        setState(prev => ({
-          ...prev,
-          status: "completed",
-          personas: prev.personas.map((p, idx) => 
-            idx === 0 ? { ...p, status: "completed" as const, percent: 100 } : p
-          )
-        }))
-        
-        const test = testStore.getTestById(testId)
-        if (test) {
-          test.status = "completed"
-          testStore.saveTest(test)
-        }
-        
-        // Clear active run when completed
-        runStore.clearRun(testId)
-
-        setTimeout(() => {
-          router.push(`/reports/${testId}`)
-        }, 2000)
-        
-        simulationRef.current = false
+        handleCompletion()
       }
     }, 3000)
 
@@ -425,6 +441,13 @@ export default function LiveRunPage() {
               const args = JSON.parse(toolCall.function.arguments)
               console.log("Agent clicking:", args)
               
+              // Check for completion rationale
+              if (args.rationale === "Done." || args.rationale === "Done") {
+                  console.log("Agent finished task via rationale.")
+                  handleCompletion(args.rationale) // Pass rationale as feedback, though it might just be "Done."
+                  break
+              }
+
               const event: RunEvent = {
                 id: Date.now().toString(),
                 t: Date.now() - startedAtRef.current,
@@ -444,6 +467,9 @@ export default function LiveRunPage() {
             }
           }
           
+          // If completion was triggered in the loop, break out
+          if (!simulationRef.current) break
+
           const newHistory = [
             ...agentHistoryRef.current,
             decision.message,
@@ -458,6 +484,16 @@ export default function LiveRunPage() {
 
         } else {
           console.log("Agent message:", decision.content)
+          
+          // Also check content for "Done." just in case
+          if (decision.content.includes("Done.") || decision.content.includes("Done")) {
+              console.log("Agent finished task via content.")
+              // Extract feedback after "Done."
+              const feedback = decision.content.replace(/Done\.?/i, "").trim()
+              handleCompletion(feedback || decision.content)
+              break
+          }
+
           setState(prev => ({
             ...prev,
             logs: [...prev.logs, { t: Date.now(), text: `Agent: ${decision.content}` }]

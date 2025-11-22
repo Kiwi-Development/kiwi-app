@@ -78,71 +78,30 @@ const findings: Finding[] = [
   },
 ]
 
+import { personaStore } from "../../../../lib/persona-store"
+
+// ... existing imports ...
+
 export default function ReportPage() {
   const params = useParams()
   const testId = params.id as string
   const [findingStates, setFindingStates] = useState<Finding[]>(findings)
-  const [variant, setVariant] = useState<"A" | "B">("A")
   const [videoDialogOpen, setVideoDialogOpen] = useState(false)
   const [selectedTimestamp, setSelectedTimestamp] = useState("")
   const { toast } = useToast()
 
   const [testData, setTestData] = useState<any>(null)
+  const [persona, setPersona] = useState<any>(null)
 
   useEffect(() => {
     const test = testStore.getTestById(testId)
     setTestData(test)
+    
+    if (test?.testData?.selectedPersona) {
+        const p = personaStore.getPersonas().find(p => p.id === test.testData!.selectedPersona)
+        setPersona(p)
+    }
   }, [testId])
-
-  const getMetrics = (variantType: "A" | "B") => {
-    if (!testData || testData.status !== "completed") {
-      return {
-        taskSuccess: 0,
-        avgTime: "0:00",
-        backtracks: 0,
-      }
-    }
-
-    if (variantType === "A") {
-      return {
-        taskSuccess: 72,
-        avgTime: "4:32",
-        backtracks: 8,
-      }
-    } else {
-      return {
-        taskSuccess: 89,
-        avgTime: "3:16",
-        backtracks: 3,
-      }
-    }
-  }
-
-  const metricsA = getMetrics("A")
-  const metricsB = getMetrics("B")
-
-  const handleShare = () => {
-    toast({
-      title: "Link copied",
-      description: "Demo-safe URL copied to clipboard",
-    })
-  }
-
-  const handleExport = () => {
-    const element = document.createElement("a")
-    const content = `Kiwi Usability Test Report\n\nTest: ${testData?.title}\nStatus: ${testData?.status}\n\nVariant A Metrics:\nTask Success: ${metricsA.taskSuccess}%\nAvg Time: ${metricsA.avgTime}\n\nVariant B Metrics:\nTask Success: ${metricsB.taskSuccess}%\nAvg Time: ${metricsB.avgTime}\n\nFindings: ${findings.length} issues identified`
-    const file = new Blob([content], { type: "text/plain" })
-    element.href = URL.createObjectURL(file)
-    element.download = `kiwi-report-${testId}.txt`
-    document.body.appendChild(element)
-    element.click()
-    document.body.removeChild(element)
-
-    toast({
-      title: "Export started",
-      description: "PDF report will download shortly",
-    })
-  }
 
   const handleValidation = (id: number, status: "validated" | "refuted") => {
     setFindingStates((prev) => prev.map((f) => (f.id === id ? { ...f, validated: status } : f)))
@@ -321,7 +280,45 @@ export default function ReportPage() {
     };
   }, [selectedTimestamp, getTimeInSeconds]);
 
-  const currentMetrics = variant === "A" ? metricsA : metricsB
+  const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000)
+    if (seconds < 60) return "just now"
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+    return `${Math.floor(hours / 24)}d ago`
+  }
+
+  const formatDuration = (ms: number) => {
+    const seconds = Math.floor(ms / 1000)
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    return `${minutes}m ${remainingSeconds}s`
+  }
+
+  const handleShare = () => {
+    toast({
+      title: "Link copied",
+      description: "Demo-safe URL copied to clipboard",
+    })
+  }
+
+  const handleExport = () => {
+    const element = document.createElement("a")
+    const content = `Kiwi Usability Test Report\n\nTest: ${testData?.title}\nStatus: ${testData?.status}\n\nMetrics:\nTask Success: 100%\nDuration: ${testData?.duration ? formatDuration(testData.duration) : "0:00"}\nActions: ${testData?.actionCount || 0}\n\nFindings: ${findings.length} issues identified`
+    const file = new Blob([content], { type: "text/plain" })
+    element.href = URL.createObjectURL(file)
+    element.download = `kiwi-report-${testId}.txt`
+    document.body.appendChild(element)
+    element.click()
+    document.body.removeChild(element)
+
+    toast({
+      title: "Export started",
+      description: "PDF report will download shortly",
+    })
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -333,12 +330,19 @@ export default function ReportPage() {
             <h1 className="text-3xl font-bold tracking-tight">{testData?.title || "Evaluations Page Design A"}</h1>
             <div className="flex items-center gap-3">
               <div className="flex gap-2">
-                <Badge variant="secondary">Jenny Park</Badge>
-                <Badge variant="secondary">Novice</Badge>
-                <Badge variant="secondary">Time-pressed</Badge>
+                {persona ? (
+                  <>
+                    <Badge variant="secondary">{persona.name}</Badge>
+                    {persona.tags.map((tag: string) => (
+                      <Badge key={tag} variant="outline">{tag}</Badge>
+                    ))}
+                  </>
+                ) : (
+                  <Badge variant="secondary">Loading Persona...</Badge>
+                )}
               </div>
               <span className="text-sm text-muted-foreground">
-                • {testData?.status === "completed" ? "Completed 2 hours ago" : "Running"}
+                • {testData?.completedAt ? `Completed ${formatTimeAgo(testData.completedAt)}` : "Running"}
               </span>
             </div>
           </div>
@@ -354,41 +358,51 @@ export default function ReportPage() {
           </div>
         </div>
 
-        <Tabs value={variant} onValueChange={(v) => setVariant(v as "A" | "B")}>
-          <TabsList>
-            <TabsTrigger value="A">Variant A</TabsTrigger>
-            <TabsTrigger value="B">Variant B</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value={variant} className="space-y-6 mt-6">
+        <div className="space-y-6 mt-6">
             <div className="grid gap-6 md:grid-cols-3">
               <Card className="w-full">
                 <CardHeader className="pb-3">
                   <CardDescription>Task Success</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{currentMetrics.taskSuccess}%</div>
+                  <div className="text-3xl font-bold">100%</div>
                 </CardContent>
               </Card>
               <Card className="w-full">
                 <CardHeader className="pb-3">
-                  <CardDescription>Avg Time</CardDescription>
+                  <CardDescription>Time</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{currentMetrics.avgTime}</div>
+                  <div className="text-3xl font-bold">
+                    {testData?.duration ? formatDuration(testData.duration) : "0:00"}
+                  </div>
                 </CardContent>
               </Card>
               <Card className="w-full">
                 <CardHeader className="pb-3">
-                  <CardDescription>Backtracks</CardDescription>
+                  <CardDescription>Actions</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{currentMetrics.backtracks}</div>
+                  <div className="text-3xl font-bold">{testData?.actionCount || 0}</div>
                 </CardContent>
               </Card>
             </div>
 
             <div className="space-y-6">
+              {testData?.feedback && (
+                <Card className="border-primary/20 bg-primary/5">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-primary" />
+                      Agent Feedback
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-base leading-relaxed whitespace-pre-wrap">{testData.feedback}</p>
+                  </CardContent>
+                </Card>
+              )}
+
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold">Findings</h2>
               </div>
@@ -498,39 +512,6 @@ export default function ReportPage() {
               ))}
             </div>
 
-            <Card className="border-primary/20 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Compare A vs B
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold">Variant A</p>
-                    <div className="space-y-1 text-sm text-muted-foreground">
-                      <div>Task Success: {metricsA.taskSuccess}%</div>
-                      <div>Avg Time: {metricsA.avgTime}</div>
-                      <div>Backtracks: {metricsA.backtracks}</div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold">Variant B</p>
-                    <div className="space-y-1 text-sm text-muted-foreground">
-                      <div>Task Success: {metricsB.taskSuccess}% (+17%)</div>
-                      <div>Avg Time: {metricsB.avgTime} (-28%)</div>
-                      <div>Backtracks: {metricsB.backtracks} (-63%)</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                  <p className="text-sm font-semibold text-foreground">Recommendation</p>
-                  <p className="text-sm text-muted-foreground mt-1">Ship Variant B with improved visual feedback</p>
-                </div>
-              </CardContent>
-            </Card>
-
             <Card>
               <CardHeader>
                 <CardTitle>Next Steps</CardTitle>
@@ -594,8 +575,8 @@ export default function ReportPage() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
+
+        </div>
       </main>
 
       <Dialog open={videoDialogOpen} onOpenChange={setVideoDialogOpen}>

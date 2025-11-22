@@ -24,6 +24,10 @@ type Test = {
     startTime: number
     estimatedDuration: number // in milliseconds
   }
+  feedback?: string
+  duration?: number // in milliseconds
+  actionCount?: number
+  completedAt?: number
 }
 
 class TestStore {

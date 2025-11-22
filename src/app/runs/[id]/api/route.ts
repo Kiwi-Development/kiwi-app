@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       - Don't ever ask the user for questions or clarification. Just choose a path and continue.
       - There may be a red dot on the screen, which shows a previous place you tried to click. You can use that to guide your next click if it was missed.
       - If the message history shows you've tried the same action more than 3 times, you should try a different action.
-      - Return the word "Done" when you have completed all the tasks.
+      - Say the word "Done" when you have completed all the tasks. Then, in the following sentences, discuss all your feedback from the task from the perspective of your persona. 
 
       NOTE: Never click on "Continue with Google" or any other element outside the prototype screen.
       You should only be clicking within the device boundaries.
