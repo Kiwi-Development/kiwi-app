@@ -30,14 +30,10 @@ import { personaStore, type Persona } from "../../../../lib/persona-store"
 
 export default function NewTestPage() {
   const [currentStep, setCurrentStep] = useState(1)
-  const [testName, setTestName] = useState("Evaluations Page Design B")
+  const [testName, setTestName] = useState("")
   const [goal, setGoal] = useState("")
-  const [environment, setEnvironment] = useState("staging")
-  const [piiRedaction, setPiiRedaction] = useState(true)
-  const [selectedPersona, setSelectedPersona] = useState("jenny-park")
-  const [useCase, setUseCase] = useState(
-    "Test the usability of the evaluation models interface for comparing AI outputs.",
-  )
+
+  const [useCase, setUseCase] = useState("")
   const [mutation, setMutation] = useState([2])
   const [prototypeType, setPrototypeType] = useState<"" | "live" | "figma">("")
   const [figmaUrl, setFigmaUrl] = useState("")
@@ -45,11 +41,7 @@ export default function NewTestPage() {
   const [validated, setValidated] = useState(false)
   const [validating, setValidating] = useState(false)
   const [validationProgress, setValidationProgress] = useState(0)
-  const [tasks, setTasks] = useState([
-    "Switch the grid view from 1x3 to 2x4 layout",
-    "Select and compare GPT-4 and Claude Sonnet models",
-    "Export comparison results as PDF",
-  ])
+  const [tasks, setTasks] = useState<string[]>([])
   const [heuristics, setHeuristics] = useState({
     visibility: true,
     realWorld: true,
@@ -71,7 +63,8 @@ export default function NewTestPage() {
   const [newPersonaAccessibility, setNewPersonaAccessibility] = useState("")
   const { toast } = useToast()
   const router = useRouter()
-  const [selectedPersonas, setSelectedPersonas] = useState<string[]>([])
+  const [selectedPersona, setSelectedPersona] = useState<string>("")
+  const [errors, setErrors] = useState<Record<string, boolean>>({})
   
   // Task management state
   const [taskDialogOpen, setTaskDialogOpen] = useState(false)
@@ -111,7 +104,40 @@ export default function NewTestPage() {
   }
 
   const handleNext = () => {
-    if (currentStep < 5) {
+    const newErrors: Record<string, boolean> = {}
+    let isValid = true
+
+    if (currentStep === 1) {
+      if (!testName.trim()) {
+        newErrors.testName = true
+        isValid = false
+      }
+      if (!goal.trim()) {
+        newErrors.goal = true
+        isValid = false
+      }
+    } else if (currentStep === 2) {
+      if (!selectedPersona) {
+        newErrors.selectedPersona = true
+        isValid = false
+      }
+      if (!useCase.trim()) {
+        newErrors.useCase = true
+        isValid = false
+      }
+    } else if (currentStep === 3) {
+      if (prototypeType === "figma" && !figmaUrl.trim()) {
+        newErrors.figmaUrl = true
+        isValid = false
+      } else if (prototypeType === "live" && !liveUrl.trim()) {
+        newErrors.liveUrl = true
+        isValid = false
+      }
+    }
+
+    setErrors(newErrors)
+
+    if (isValid && currentStep < 5) {
       setCurrentStep(currentStep + 1)
     }
   }
@@ -148,12 +174,8 @@ export default function NewTestPage() {
     setNewPersonaAccessibility("")
   }
 
-  const togglePersona = (personaId: string) => {
-    setSelectedPersonas(prev => 
-      prev.includes(personaId)
-        ? prev.filter(id => id !== personaId)
-        : [...prev, personaId]
-    )
+  const selectPersona = (personaId: string) => {
+    setSelectedPersona(personaId)
   }
 
   const toggleTag = (tag: string) => {
@@ -222,17 +244,16 @@ export default function NewTestPage() {
       title: testName,
       status: "running" as const,
       lastRun: "Just now",
-      personas: personaStore.getPersonas()
-        .filter(p => selectedPersonas.includes(p.id))
-        .map(p => `${p.name} / ${p.role}`),
+      personas: selectedPersona ? (() => {
+        const persona = personaStore.getPersonas().find(p => p.id === selectedPersona)
+        return persona ? [`${persona.name} / ${persona.role}`] : []
+      })() : [],
       artifactType: prototypeType === "figma" ? "Figma" : "Live URL",
       createdAt: Date.now(),
       testData: {
         testName,
         goal,
-        environment,
-        piiRedaction,
-        selectedPersonas,
+        selectedPersona,
         useCase,
         tasks,
         figmaUrlA: figmaUrl,
@@ -278,6 +299,7 @@ export default function NewTestPage() {
                   value={testName}
                   onChange={(e) => setTestName(e.target.value)}
                   placeholder="e.g., Evaluations Page Design B"
+                  className={errors.testName ? "border-red-500" : ""}
                 />
               </div>
 
@@ -288,30 +310,10 @@ export default function NewTestPage() {
                   value={goal}
                   onChange={(e) => setGoal(e.target.value)}
                   placeholder="What decision will this inform?"
-                  className="min-h-24"
+                  className={`min-h-24 ${errors.goal ? "border-red-500" : ""}`}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="environment">Environment</Label>
-                <Select value={environment} onValueChange={setEnvironment}>
-                  <SelectTrigger id="environment">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="staging">Staging</SelectItem>
-                    <SelectItem value="production">Production</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="pii">PII Redaction</Label>
-                  <p className="text-sm text-muted-foreground">Automatically redact personal information</p>
-                </div>
-                <Switch id="pii" checked={piiRedaction} onCheckedChange={setPiiRedaction} />
-              </div>
             </CardContent>
           </Card>
         )}
@@ -325,23 +327,25 @@ export default function NewTestPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>Select Personas *</Label>
-                  <div className="space-y-2">
+                  <Label>Select Persona *</Label>
+                  <div className={`space-y-2 ${errors.selectedPersona ? "border border-red-500 rounded-lg p-2" : ""}`}>
                     {personaStore.getPersonas().map((persona) => (
                       <div 
                         key={persona.id}
                         className={`flex items-center space-x-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                          selectedPersonas.includes(persona.id)
+                          selectedPersona === persona.id
                             ? 'bg-primary/10 border-primary'
                             : 'hover:bg-accent/50'
                         }`}
-                        onClick={() => togglePersona(persona.id)}
+                        onClick={() => selectPersona(persona.id)}
                       >
-                        <Checkbox 
-                          checked={selectedPersonas.includes(persona.id)} 
-                          onCheckedChange={() => togglePersona(persona.id)}
-                          className="h-5 w-5"
-                        />
+                        <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
+                          selectedPersona === persona.id ? 'border-primary' : 'border-input'
+                        }`}>
+                          {selectedPersona === persona.id && (
+                            <div className="h-3 w-3 rounded-full bg-primary" />
+                          )}
+                        </div>
                         <div>
                           <div className="font-medium">{persona.name}</div>
                           <div className="text-sm text-muted-foreground">
@@ -368,7 +372,8 @@ export default function NewTestPage() {
                     id="useCase"
                     value={useCase}
                     onChange={(e) => setUseCase(e.target.value)}
-                    className="min-h-24"
+                    placeholder="Test the usability of the evaluation models interface for comparing AI outputs"
+                    className={`min-h-24 ${errors.useCase ? "border-red-500" : ""}`}
                   />
                 </div>
 
@@ -514,7 +519,7 @@ export default function NewTestPage() {
                         accessibility: newPersonaAccessibility.split('\n').filter(Boolean),
                       })
                       
-                      setSelectedPersonas(prev => [...prev, newPersona.id])
+                      setSelectedPersona(newPersona.id)
                       setPersonaDialogOpen(false)
                       setNewPersonaName("")
                       setNewPersonaRole("")
@@ -589,6 +594,7 @@ export default function NewTestPage() {
                       value={figmaUrl}
                       onChange={(e) => setFigmaUrl(e.target.value)}
                       placeholder="https://www.figma.com/proto/..."
+                      className={errors.figmaUrl ? "border-red-500" : ""}
                     />
                   </div>
 
@@ -652,6 +658,7 @@ export default function NewTestPage() {
                       value={liveUrl}
                       onChange={(e) => setLiveUrl(e.target.value)}
                       placeholder="https://example.com"
+                      className={errors.liveUrl ? "border-red-500" : ""}
                     />
                   </div>
 
@@ -864,10 +871,6 @@ export default function NewTestPage() {
                       <span className="font-medium">{testName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Environment:</span>
-                      <span className="font-medium capitalize">{environment}</span>
-                    </div>
-                    <div className="flex justify-between">
                       <span className="text-muted-foreground">Goal:</span>
                       <span className="font-medium text-right max-w-[60%]">{goal}</span>
                     </div>
@@ -878,15 +881,15 @@ export default function NewTestPage() {
                   <h4 className="text-sm font-semibold mb-2">Personas</h4>
                   <div className="space-y-3">
                     <div className="flex flex-wrap gap-2">
-                      {personaStore.getPersonas()
-                        .filter((p) => selectedPersonas.includes(p.id))
-                        .map((p) => (
-                          <Badge key={p.id} variant="secondary">
-                            {p.name} / {p.role}
+                      {selectedPersona ? (() => {
+                        const persona = personaStore.getPersonas().find(p => p.id === selectedPersona)
+                        return persona ? (
+                          <Badge key={persona.id} variant="secondary">
+                            {persona.name} / {persona.role}
                           </Badge>
-                        ))}
-                      {selectedPersonas.length === 0 && (
-                        <span className="text-sm text-muted-foreground">No personas selected</span>
+                        ) : null
+                      })() : (
+                        <span className="text-sm text-muted-foreground">No persona selected</span>
                       )}
                     </div>
                     <div className="text-sm">

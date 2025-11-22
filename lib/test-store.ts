@@ -11,9 +11,7 @@ type Test = {
   testData?: {
     testName: string
     goal: string
-    environment: string
-    piiRedaction: boolean
-    selectedPersonas: string[]
+    selectedPersona: string
     useCase: string
     tasks: string[]
     figmaUrlA?: string

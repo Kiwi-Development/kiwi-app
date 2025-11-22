@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import type { RunEvent } from "../model"
+import type { RunEvent } from "@/lib/types"
 import { Badge } from "../../../../../components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../../../../components/ui/tooltip"
 import { MousePointerClick, Send, ArrowLeft, AlertCircle, Zap, AlertTriangle, Focus } from "lucide-react"
@@ -34,10 +34,12 @@ const eventVariants: Record<string, "default" | "secondary" | "destructive" | "o
 }
 
 export function EventTimeline({ events, onEventClick, highlightedEventId }: EventTimelineProps) {
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  const formatTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000)
+    const hours = Math.floor(totalSeconds / 3600)
+    const mins = Math.floor((totalSeconds % 3600) / 60)
+    const secs = totalSeconds % 60
+    return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
   }
 
   return (

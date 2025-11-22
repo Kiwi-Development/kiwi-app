@@ -7,16 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../../components
 import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
 import { Share2 } from "lucide-react"
-import { ReplayPlayer } from "./components/replay-player"
 import { PersonaProgressList } from "./components/persona-progress-list"
 import { LiveLog } from "./components/live-log"
 import { EventTimeline } from "./components/event-timeline"
 import { SideTabs } from "./components/side-tabs"
-import type { LiveRunState, RunEvent } from "./model"
+import type { LiveRunState, RunEvent } from "@/lib/types"
 import { useToast } from "../../../../hooks/use-toast"
 import { testStore } from "../../../../lib/test-store"
 import { personaStore } from "../../../../lib/persona-store"
-import { getTaskServerUrl } from "../../actions"
+import { runStore } from "@/lib/run-store"
 import { proxyScreenshot, proxyClick } from "../../proxy-actions"
 
 const statusColors: Record<string, string> = {
@@ -49,60 +48,137 @@ export default function LiveRunPage() {
 
   const testId = params.id as string
 
-  const [state, setState] = useState<LiveRunState>({
-    runId: testId,
-    title: "Loading...",
-    status: "running",
-    startedAt: Date.now(),
-    etaLabel: "~8 min",
-    personas: [],
-    events: [],
-    logs: [],
-    steps: [],
-    tags: [],
-    consoleTrace: [],
-  })
-
-  const prevCompletedCountRef = useRef(0)
-
-  useEffect(() => {
+  // Initialize state with actual test data or from active run
+  const [state, setState] = useState<LiveRunState>(() => {
+    const activeRun = runStore.getActiveRun(testId)
+    
+    if (activeRun && activeRun.state.status === "running") {
+      return activeRun.state
+    }
+    
+    // Initialize from test data
     const test = testStore.getTestById(testId)
     if (test) {
-      const personas = test.testData?.selectedPersonas?.map((id) => {
-        const p = personaStore.getPersonas().find((p) => p.id === id)
-        return {
-          id: id,
-          name: p?.name || "Unknown",
-          variant: p?.role || "User",
+      const personas = test.testData?.selectedPersona ? (() => {
+        const p = personaStore.getPersonas().find((persona) => persona.id === test.testData?.selectedPersona)
+        return p ? [{
+          id: test.testData.selectedPersona,
+          name: p.name,
+          variant: p.role,
           status: "queued" as const,
           percent: 0,
-        }
-      }) || []
+        }] : []
+      })() : []
 
       const steps = test.testData?.tasks?.map((task, index) => ({
         index,
         title: task,
       })) || []
 
-      setState((prev) => ({
-        ...prev,
+      return {
+        runId: testId,
         title: test.title,
         status: test.status === "completed" ? "completed" : "running",
-        personas: personas.length > 0 ? personas : prev.personas,
-        steps: steps.length > 0 ? steps : prev.steps,
-      }))
+        startedAt: Date.now(),
+        etaLabel: "~8 min",
+        personas,
+        events: [],
+        logs: [],
+        steps,
+        tags: [],
+        consoleTrace: [],
+      }
+    }
+    
+    // Fallback to loading state
+    return {
+      runId: testId,
+      title: "Loading...",
+      status: "running",
+      startedAt: Date.now(),
+      etaLabel: "~8 min",
+      personas: [],
+      events: [],
+      logs: [],
+      steps: [],
+      tags: [],
+      consoleTrace: [],
+    }
+  })
 
-      if (test.status === "completed") {
+  const prevCompletedCountRef = useRef(0)
+  const sessionIdRef = useRef<string | null>(null)
+  const agentHistoryRef = useRef<any[]>([])
+  const startedAtRef = useRef<number>(Date.now())
+
+  // Load initial state from store or create new
+  useEffect(() => {
+    const activeRun = runStore.getActiveRun(testId)
+    
+    if (activeRun && activeRun.state.status === "running") {
+      console.log("Resuming active run:", activeRun)
+      setState(activeRun.state)
+      setAgentHistory(activeRun.agentHistory)
+      agentHistoryRef.current = activeRun.agentHistory
+      sessionIdRef.current = activeRun.sessionId
+      if (activeRun.state.startedAt) {
+        startedAtRef.current = activeRun.state.startedAt
+      }
+      
+      // If it was running, resume the loop
+      if (!simulationRef.current) {
+        simulationRef.current = true
+        setIsSimulating(true)
+        // Resume with correct progress
+        const initialProgress = activeRun.state.personas[0]?.percent || 0
+        runSimulation(true, initialProgress)
+      }
+    } else {
+      // Check if test is already completed
+      const test = testStore.getTestById(testId)
+      if (test?.status === "completed") {
         router.push(`/reports/${testId}`)
       }
     }
+    
+    // Cleanup on unmount
+    return () => {
+      simulationRef.current = false
+    }
   }, [testId, router])
 
+  // Save state changes to store
+  useEffect(() => {
+    if (state.status === "running" && sessionIdRef.current) {
+      runStore.saveRun(testId, {
+        testId,
+        sessionId: sessionIdRef.current,
+        state,
+        agentHistory: agentHistoryRef.current,
+      })
+    } else if (state.status === "completed" || state.status === "error") {
+       // Optional: clear run when completed? 
+       // runStore.clearRun(testId)
+       // For now, let's keep it so they can see the final state if they navigate back
+       if (sessionIdRef.current) {
+         runStore.saveRun(testId, {
+            testId,
+            sessionId: sessionIdRef.current,
+            state,
+            agentHistory: agentHistoryRef.current,
+         })
+       }
+    }
+  }, [state, testId]) // Removed agentHistory from deps as we use ref
 
-  const runSimulation = async () => {
-    if (simulationRef.current) return
-    simulationRef.current = true
-    setIsSimulating(true)
+
+  const runSimulation = async (isResuming = false, initialProgress = 0) => {
+    if (!isResuming && simulationRef.current) return
+    // If resuming, we already set simulationRef.current = true in useEffect
+    if (!isResuming) {
+        simulationRef.current = true
+        setIsSimulating(true)
+    }
 
     const test = testStore.getTestById(testId)
     const tasks = test?.testData?.tasks || []
@@ -120,141 +196,101 @@ export default function LiveRunPage() {
     }
     
     let serverUrl: string
+    let sessionId: string
     
-    // Set persona to running
-    setState(prev => ({
-      ...prev,
-      personas: prev.personas.map((p, idx) => 
-        idx === 0 ? { ...p, status: "running" as const, percent: 0 } : p
-      )
-    }))
-
-    // Start ECS task via Lambda
+    // Use static EC2 instance
     try {
-      setState(prev => ({
-        ...prev,
-        logs: [...prev.logs, { t: Date.now(), text: "Starting browser server..." }]
-      }))
-
-      const lambdaUrl = process.env.NEXT_PUBLIC_LAMBDA_START_TASK_URL
-      if (!lambdaUrl) {
-        throw new Error("NEXT_PUBLIC_LAMBDA_START_TASK_URL not configured")
+      const ip = process.env.NEXT_PUBLIC_EC2_IP
+      if (!ip) {
+        throw new Error("NEXT_PUBLIC_EC2_IP not configured")
       }
+      serverUrl = `http://${ip}`
 
-      const startTaskRes = await fetch(lambdaUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          environment: {
-            URL: figmaUrl
-          }
-        })
-      })
-
-      const responseText = await startTaskRes.text()
-
-      if (!startTaskRes.ok) {
-        let errorMessage = `Failed to start server (${startTaskRes.status})`
-        
-        const contentType = startTaskRes.headers.get("content-type")
-        if (contentType && contentType.includes("application/json")) {
-          try {
-            const error = JSON.parse(responseText)
-            errorMessage = `Failed to start server: ${error.error || error.details || error.message}`
-          } catch (e) {
-            errorMessage = `Failed to start server: ${responseText.substring(0, 200)}`
-          }
-        } else {
-          errorMessage = `Failed to start server: ${responseText.substring(0, 200)}`
-        }
-        
-        throw new Error(errorMessage)
-      }
-
-      const taskData = JSON.parse(responseText)
-      serverUrl = taskData.serverUrl || taskData.publicUrl
-
-      // If no server URL, poll for it
-      if (!serverUrl) {
-        const taskArn = taskData.taskArn
-        const cluster = taskData.cluster
-        console.log("Task ARN:", taskArn)
-        console.log("Cluster:", cluster) 
-        
+      if (!isResuming) {
+        // Set persona to running
         setState(prev => ({
-          ...prev,
-          logs: [...prev.logs, { 
+            ...prev,
+            personas: prev.personas.map((p, idx) => 
+            idx === 0 ? { ...p, status: "running" as const, percent: 0 } : p
+            )
+        }))
+
+        setState(prev => ({
+            ...prev,
+            logs: [...prev.logs, { 
             t: Date.now(), 
-            text: `Task ${taskData.taskId} started, waiting for IP address...` 
-          }]
+            text: `Connecting to server...` 
+            }]
         }))
         
-        const maxPollAttempts = 30
-        let pollAttempt = 0
+        // Start session on backend
+        const startRes = await fetch(`${serverUrl}/start`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: figmaUrl })
+        })
         
-        while (!serverUrl && pollAttempt < maxPollAttempts) {
-          await new Promise(r => setTimeout(r, 2000))
-          pollAttempt++
+        if (!startRes.ok) {
+            throw new Error(`Failed to start session: ${startRes.statusText}`)
+        }
+        
+        const startData = await startRes.json()
+        sessionId = startData.sessionId
+        sessionIdRef.current = sessionId
 
-          try {
-            console.log("Calling getTaskServerUrl with:", taskArn, cluster)
-            const url = await getTaskServerUrl(taskArn, cluster)
-            if (url) {
-              serverUrl = url
-              console.log("Got server URL:", serverUrl)
-              break
+        setState(prev => ({
+            ...prev,
+            logs: [...prev.logs, { 
+            t: Date.now(), 
+            text: `Browser session started` 
+            }]
+        }))
+
+        // Wait for server to be ready
+        setState(prev => ({
+            ...prev,
+            logs: [...prev.logs, { t: Date.now(), text: "Waiting for server to be ready..." }]
+        }))
+
+        let serverReady = false
+        const maxHealthChecks = 50
+        
+        for (let i = 0; i < maxHealthChecks; i++) {
+            await new Promise(r => setTimeout(r, 2000))
+            
+            try {
+            const healthCheck = await proxyScreenshot(serverUrl, sessionId)
+            
+            if (healthCheck.status === "ok") {
+                serverReady = true
+                console.log("Server is ready!")
+                break
             }
-          } catch (pollError) {
-            console.log("Poll attempt failed:", pollError)
-          }
+            } catch (e) {
+            console.log(`Server not ready yet (attempt ${i + 1}/${maxHealthChecks})`)
+            }
         }
-
-        if (!serverUrl) {
-          throw new Error("Failed to get server IP after 60 seconds. The task may still be starting.")
-        }
-      }
-
-      setState(prev => ({
-        ...prev,
-        logs: [...prev.logs, { 
-          t: Date.now(), 
-          text: `Server URL obtained: ${serverUrl}` 
-        }]
-      }))
-
-      // Wait for server to be ready
-      setState(prev => ({
-        ...prev,
-        logs: [...prev.logs, { t: Date.now(), text: "Waiting for server to be ready..." }]
-      }))
-
-      let serverReady = false
-      const maxHealthChecks = 50
-      
-      for (let i = 0; i < maxHealthChecks; i++) {
-        await new Promise(r => setTimeout(r, 2000))
         
-        try {
-          const healthCheck = await proxyScreenshot(serverUrl)
-          
-          if (healthCheck.status === "ok") {
-            serverReady = true
-            console.log("Server is ready!")
-            break
-          }
-        } catch (e) {
-          console.log(`Server not ready yet (attempt ${i + 1}/${maxHealthChecks})`)
+        if (!serverReady) {
+            throw new Error("Server failed to become ready within timeout")
         }
-      }
-      
-      if (!serverReady) {
-        throw new Error("Server failed to become ready within timeout")
-      }
 
-      setState(prev => ({
-        ...prev,
-        logs: [...prev.logs, { t: Date.now(), text: "✅ Server ready! Starting AI simulation..." }]
-      }))
+        setState(prev => ({
+            ...prev,
+            logs: [...prev.logs, { t: Date.now(), text: "✅ Server ready! Starting AI simulation..." }]
+        }))
+      } else {
+          // Resuming
+          if (!sessionIdRef.current) {
+              throw new Error("Cannot resume without session ID")
+          }
+          sessionId = sessionIdRef.current
+          
+          setState(prev => ({
+            ...prev,
+            logs: [...prev.logs, { t: Date.now(), text: "🔄 Resuming simulation..." }]
+          }))
+      }
 
     } catch (error: any) {
       console.error("Failed to start ECS task:", error)
@@ -280,10 +316,15 @@ export default function LiveRunPage() {
     }
 
     // Start progress tracking
-    let currentProgress = 0
-    const progressIncrement = 1.5
+    let currentProgress = initialProgress
+    const progressIncrement = 2
     
     const progressInterval = setInterval(() => {
+      if (!simulationRef.current) {
+          clearInterval(progressInterval)
+          return
+      }
+
       currentProgress = Math.min(currentProgress + progressIncrement, 100)
       
       setState(prev => ({
@@ -310,6 +351,9 @@ export default function LiveRunPage() {
           testStore.saveTest(test)
         }
         
+        // Clear active run when completed
+        runStore.clearRun(testId)
+
         setTimeout(() => {
           router.push(`/reports/${testId}`)
         }, 2000)
@@ -321,7 +365,7 @@ export default function LiveRunPage() {
     // Main simulation loop
     try {
       while (simulationRef.current && currentProgress < 100) {
-        const screenshotData = await proxyScreenshot(serverUrl)
+        const screenshotData = await proxyScreenshot(serverUrl, sessionId)
         
         if (screenshotData.status === "error" || !screenshotData.screenshot) {
           console.error("Failed to get screenshot:", screenshotData.message)
@@ -338,7 +382,7 @@ export default function LiveRunPage() {
           body: JSON.stringify({
             screenshot: b64,
             tasks,
-            history: agentHistory,
+            history: agentHistoryRef.current,
           }),
         })
 
@@ -353,7 +397,7 @@ export default function LiveRunPage() {
               
               const event: RunEvent = {
                 id: Date.now().toString(),
-                t: Date.now() - (state.startedAt || Date.now()),
+                t: Date.now() - startedAtRef.current,
                 type: "click",
                 label: args.rationale || `Click at ${args.x}, ${args.y}`,
                 personaId: state.personas[0]?.id || "unknown",
@@ -365,26 +409,32 @@ export default function LiveRunPage() {
                 logs: [...prev.logs, { t: Date.now(), text: `Agent: ${args.rationale}` }]
               }))
 
-              await proxyClick(serverUrl, args.x, args.y)
+              await proxyClick(serverUrl, sessionId, args.x, args.y)
             }
           }
           
-          setAgentHistory(prev => [
-            ...prev,
+          const newHistory = [
+            ...agentHistoryRef.current,
             decision.message,
             {
               role: "tool",
               tool_call_id: decision.tool_calls[0].id,
               content: "Clicked successfully",
             }
-          ])
+          ]
+          agentHistoryRef.current = newHistory
+          setAgentHistory(newHistory)
+
         } else {
           console.log("Agent message:", decision.content)
           setState(prev => ({
             ...prev,
             logs: [...prev.logs, { t: Date.now(), text: `Agent: ${decision.content}` }]
           }))
-          setAgentHistory(prev => [...prev, decision.message])
+          
+          const newHistory = [...agentHistoryRef.current, decision.message]
+          agentHistoryRef.current = newHistory
+          setAgentHistory(newHistory)
         }
 
         await new Promise(r => setTimeout(r, 2000))
@@ -407,11 +457,13 @@ export default function LiveRunPage() {
   const hasStartedRef = useRef(false)
   
   useEffect(() => {
-    if (state.status === "running" && !hasStartedRef.current) {
+    // Only start automatically if NOT resuming (resuming is handled in the first useEffect)
+    // And only if status is running and we have personas loaded
+    if (state.status === "running" && !hasStartedRef.current && !sessionIdRef.current && state.personas.length > 0) {
         hasStartedRef.current = true
         runSimulation()
     }
-  }, [state.status])
+  }, [state.status, state.personas.length])
 
   const handleEventClick = (event: RunEvent) => {
     if (videoRef.current) {

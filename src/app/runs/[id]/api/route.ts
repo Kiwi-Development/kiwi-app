@@ -20,6 +20,8 @@ export async function POST(req: Request) {
       - If you see an element that helps complete the current task, click it.
       - If you are unsure, you can click to explore or wait.
       - If the task is complete, move to the next one.
+      - Don't ever ask the user for questions or clarification. Just choose a path and continue.
+      - There may be a red dot on the screen, which shows a previous place you tried to click. You can use that to guide your next click if it was missed.
 
       NOTE: Never click on "Continue with Google" or any other element outside the prototype screen.
       You should only be clicking within the device boundaries.
@@ -36,7 +38,7 @@ export async function POST(req: Request) {
       {
         role: "user",
         content: [
-          { type: "text", text: "Here is the current screen. What should I do next?" },
+          { type: "text", text: "Here is the current screen" },
           {
             type: "image_url",
             image_url: {
