@@ -37,19 +37,7 @@ class TestStore {
   }
 
   private getDefaultTests(): Test[] {
-    return [
-      {
-        id: "1",
-        title: "Onboarding A/B — Storefront",
-        status: "completed",
-        lastRun: "2 hours ago",
-        personas: ["Jenny Park", "Time-pressed", "Novice"],
-        artifactType: "Figma",
-        successRate: 100,
-        avgTime: "4:32",
-        createdAt: Date.now() - 7200000,
-      },
-    ]
+    return []
   }
 
   saveTest(test: Test) {

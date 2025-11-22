@@ -204,7 +204,7 @@ export default function LiveRunPage() {
       if (!ip) {
         throw new Error("NEXT_PUBLIC_EC2_IP not configured")
       }
-      serverUrl = `http://${ip}`
+      serverUrl = `https://${ip}`
 
       if (!isResuming) {
         // Set persona to running
