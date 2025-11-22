@@ -16,7 +16,7 @@ import { useToast } from "../../../../hooks/use-toast"
 import { testStore } from "../../../../lib/test-store"
 import { personaStore } from "../../../../lib/persona-store"
 import { runStore } from "@/lib/run-store"
-import { proxyScreenshot, proxyClick } from "../../proxy-actions"
+import { proxyScreenshot, proxyClick, startSession } from "../../proxy-actions"
 
 const statusColors: Record<string, string> = {
   queued: "bg-slate-500 text-slate-50",
@@ -48,68 +48,28 @@ export default function LiveRunPage() {
 
   const testId = params.id as string
 
-  // Initialize state with actual test data or from active run
-  const [state, setState] = useState<LiveRunState>(() => {
-    const activeRun = runStore.getActiveRun(testId)
-    
-    if (activeRun && activeRun.state.status === "running") {
-      return activeRun.state
-    }
-    
-    // Initialize from test data
-    const test = testStore.getTestById(testId)
-    if (test) {
-      const personas = test.testData?.selectedPersona ? (() => {
-        const p = personaStore.getPersonas().find((persona) => persona.id === test.testData?.selectedPersona)
-        return p ? [{
-          id: test.testData.selectedPersona,
-          name: p.name,
-          variant: p.role,
-          status: "queued" as const,
-          percent: 0,
-        }] : []
-      })() : []
-
-      const steps = test.testData?.tasks?.map((task, index) => ({
-        index,
-        title: task,
-      })) || []
-
-      return {
-        runId: testId,
-        title: test.title,
-        status: test.status === "completed" ? "completed" : "running",
-        startedAt: Date.now(),
-        etaLabel: "~8 min",
-        personas,
-        events: [],
-        logs: [],
-        steps,
-        tags: [],
-        consoleTrace: [],
-      }
-    }
-    
-    // Fallback to loading state
-    return {
-      runId: testId,
-      title: "Loading...",
-      status: "running",
-      startedAt: Date.now(),
-      etaLabel: "~8 min",
-      personas: [],
-      events: [],
-      logs: [],
-      steps: [],
-      tags: [],
-      consoleTrace: [],
-    }
+  // Initialize state with deterministic default to prevent hydration mismatch
+  const [state, setState] = useState<LiveRunState>({
+    runId: testId,
+    title: "Loading...",
+    status: "running",
+    startedAt: 0,
+    etaLabel: "~8 min",
+    personas: [],
+    events: [],
+    logs: [],
+    steps: [],
+    tags: [],
+    consoleTrace: [],
   })
 
   const prevCompletedCountRef = useRef(0)
   const sessionIdRef = useRef<string | null>(null)
   const agentHistoryRef = useRef<any[]>([])
   const startedAtRef = useRef<number>(Date.now())
+  
+  // FIX: New Ref to track the unique ID of the currently active loop
+  const activeExecutionIdRef = useRef<string>("") 
 
   // Load initial state from store or create new
   useEffect(() => {
@@ -134,10 +94,44 @@ export default function LiveRunPage() {
         runSimulation(true, initialProgress)
       }
     } else {
-      // Check if test is already completed
+      // Initialize from test data
       const test = testStore.getTestById(testId)
-      if (test?.status === "completed") {
-        router.push(`/reports/${testId}`)
+      
+      if (test) {
+        if (test.status === "completed") {
+          router.push(`/reports/${testId}`)
+          return
+        }
+
+        const personas = test.testData?.selectedPersona ? (() => {
+          const p = personaStore.getPersonas().find((persona) => persona.id === test.testData?.selectedPersona)
+          return p ? [{
+            id: test.testData.selectedPersona,
+            name: p.name,
+            variant: p.role,
+            status: "queued" as const,
+            percent: 0,
+          }] : []
+        })() : []
+
+        const steps = test.testData?.tasks?.map((task, index) => ({
+          index,
+          title: task,
+        })) || []
+
+        setState({
+          runId: testId,
+          title: test.title,
+          status: "running",
+          startedAt: Date.now(),
+          etaLabel: "~8 min",
+          personas,
+          events: [],
+          logs: [],
+          steps,
+          tags: [],
+          consoleTrace: [],
+        })
       }
     }
     
@@ -146,6 +140,12 @@ export default function LiveRunPage() {
       simulationRef.current = false
     }
   }, [testId, router])
+
+  const stateRef = useRef(state)
+  
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
 
   // Save state changes to store
   useEffect(() => {
@@ -169,12 +169,19 @@ export default function LiveRunPage() {
          })
        }
     }
-  }, [state, testId]) // Removed agentHistory from deps as we use ref
+  }, [state, testId])
 
 
   const runSimulation = async (isResuming = false, initialProgress = 0) => {
-    if (!isResuming && simulationRef.current) return
-    // If resuming, we already set simulationRef.current = true in useEffect
+    // FIX: Generate a unique ID for this specific run
+    const executionId = Date.now().toString() + Math.random().toString().slice(2, 6)
+    activeExecutionIdRef.current = executionId
+
+    if (!isResuming && simulationRef.current) {
+        // If we are trying to start a new one but one is technically "running",
+        // the executionId logic will handle killing the old one, so we can proceed.
+    }
+
     if (!isResuming) {
         simulationRef.current = true
         setIsSimulating(true)
@@ -198,14 +205,8 @@ export default function LiveRunPage() {
     let serverUrl: string
     let sessionId: string
     
-    // Use static EC2 instance
+    // Use static EC2 instance via Server Actions
     try {
-      const ip = process.env.NEXT_PUBLIC_EC2_IP
-      if (!ip) {
-        throw new Error("NEXT_PUBLIC_EC2_IP not configured")
-      }
-      serverUrl = `https://${ip}`
-
       if (!isResuming) {
         // Set persona to running
         setState(prev => ({
@@ -223,18 +224,8 @@ export default function LiveRunPage() {
             }]
         }))
         
-        // Start session on backend
-        const startRes = await fetch(`${serverUrl}/start`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: figmaUrl })
-        })
-        
-        if (!startRes.ok) {
-            throw new Error(`Failed to start session: ${startRes.statusText}`)
-        }
-        
-        const startData = await startRes.json()
+        // Start session on backend via Server Action
+        const startData = await startSession(figmaUrl)
         sessionId = startData.sessionId
         sessionIdRef.current = sessionId
 
@@ -256,10 +247,14 @@ export default function LiveRunPage() {
         const maxHealthChecks = 50
         
         for (let i = 0; i < maxHealthChecks; i++) {
+            // FIX: Check execution ID during wait
+            if (activeExecutionIdRef.current !== executionId) return
+
             await new Promise(r => setTimeout(r, 2000))
             
             try {
-            const healthCheck = await proxyScreenshot(serverUrl, sessionId)
+            // Use Server Action for screenshot/health check
+            const healthCheck = await proxyScreenshot(sessionId)
             
             if (healthCheck.status === "ok") {
                 serverReady = true
@@ -295,6 +290,9 @@ export default function LiveRunPage() {
     } catch (error: any) {
       console.error("Failed to start ECS task:", error)
       
+      // FIX: Don't update state if this thread is dead
+      if (activeExecutionIdRef.current !== executionId) return
+
       toast({
         title: "Server Start Failed",
         description: error.message,
@@ -320,7 +318,8 @@ export default function LiveRunPage() {
     const progressIncrement = 2
     
     const progressInterval = setInterval(() => {
-      if (!simulationRef.current) {
+      // FIX: Check both global flag AND specific execution ID
+      if (!simulationRef.current || activeExecutionIdRef.current !== executionId) {
           clearInterval(progressInterval)
           return
       }
@@ -363,18 +362,44 @@ export default function LiveRunPage() {
     }, 3000)
 
     // Main simulation loop
+    const DECISION_DELAY_MS = 3000
+    let lastDecisionTime = Date.now()
+
     try {
       while (simulationRef.current && currentProgress < 100) {
-        const screenshotData = await proxyScreenshot(serverUrl, sessionId)
+        
+        // FIX: Critical guard - if a new execution started, kill this one
+        if (activeExecutionIdRef.current !== executionId) {
+            console.log(`Stopping zombie execution: ${executionId}`)
+            break
+        }
+
+        // Always update screenshot
+        if (!simulationRef.current) break
+
+        const screenshotData = await proxyScreenshot(sessionId)
+        
+        // FIX: Check again after await
+        if (activeExecutionIdRef.current !== executionId) break
         
         if (screenshotData.status === "error" || !screenshotData.screenshot) {
           console.error("Failed to get screenshot:", screenshotData.message)
-          await new Promise(r => setTimeout(r, 2000))
+          await new Promise(r => setTimeout(r, 1000))
           continue
         }
 
         const b64 = screenshotData.screenshot
         setCurrentScreenshot(b64)
+
+        // Check if enough time has passed for next decision
+        const now = Date.now()
+        if (now - lastDecisionTime < DECISION_DELAY_MS) {
+            await new Promise(r => setTimeout(r, 1000))
+            continue
+        }
+
+        if (!simulationRef.current) break
+        if (activeExecutionIdRef.current !== executionId) break
 
         const decideRes = await fetch(`/runs/${testId}/api`, {
           method: "POST",
@@ -383,10 +408,15 @@ export default function LiveRunPage() {
             screenshot: b64,
             tasks,
             history: agentHistoryRef.current,
+            persona: stateRef.current.personas[0],
           }),
         })
+        
+        // FIX: Check again after expensive API call
+        if (activeExecutionIdRef.current !== executionId) break
 
         const decision = await decideRes.json()
+        lastDecisionTime = Date.now() 
         console.log("Agent decided:", decision)
 
         if (decision.action === "tool_call") {
@@ -400,7 +430,7 @@ export default function LiveRunPage() {
                 t: Date.now() - startedAtRef.current,
                 type: "click",
                 label: args.rationale || `Click at ${args.x}, ${args.y}`,
-                personaId: state.personas[0]?.id || "unknown",
+                personaId: stateRef.current.personas[0]?.id || "unknown",
               }
               
               setState(prev => ({
@@ -409,7 +439,8 @@ export default function LiveRunPage() {
                 logs: [...prev.logs, { t: Date.now(), text: `Agent: ${args.rationale}` }]
               }))
 
-              await proxyClick(serverUrl, sessionId, args.x, args.y)
+              // Use Server Action for click
+              await proxyClick(sessionId, args.x, args.y)
             }
           }
           
@@ -436,21 +467,26 @@ export default function LiveRunPage() {
           agentHistoryRef.current = newHistory
           setAgentHistory(newHistory)
         }
-
-        await new Promise(r => setTimeout(r, 2000))
       }
     } catch (e) {
-      console.error("Simulation error:", e)
-      clearInterval(progressInterval)
-      toast({
-        title: "Simulation Error",
-        description: "An error occurred during the simulation.",
-        variant: "destructive",
-      })
+      // FIX: Only report errors for the active thread
+      if (activeExecutionIdRef.current === executionId) {
+          console.error("Simulation error:", e)
+          toast({
+            title: "Simulation Error",
+            description: "An error occurred during the simulation.",
+            variant: "destructive",
+          })
+      }
     } finally {
       clearInterval(progressInterval)
-      simulationRef.current = false
-      setIsSimulating(false)
+      
+      // FIX: Only update global state if this was the active execution
+      // This prevents an old "zombie" loop from turning off the flag for a new valid loop
+      if (activeExecutionIdRef.current === executionId) {
+          simulationRef.current = false
+          setIsSimulating(false)
+      }
     }
   }
   

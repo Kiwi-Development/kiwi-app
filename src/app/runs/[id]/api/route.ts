@@ -7,7 +7,7 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { screenshot, tasks, history } = await req.json()
+    const { screenshot, tasks, history, persona } = await req.json()
 
     if (!screenshot) {
       return NextResponse.json({ error: "Screenshot is required" }, { status: 400 })
@@ -16,12 +16,19 @@ export async function POST(req: Request) {
     const systemPrompt = `You are a helpful assistant that will simulate UI/UX usability testing. You will be given two functions that link to a Flask API endpoint for clicking and receiving a screenshot of the screen. Using those two tools, you will attempt to complete the tasks given to you by navigating the Figma UI via those two endpoints. Your goal is to complete the following tasks on the provided UI:
       ${tasks.map((t: string, i: number) => `${i + 1}. ${t}`).join("\n")}
 
+      You are simulating the following persona:
+      Name: ${persona?.name || "Unknown"}
+      Role: ${persona?.variant || persona?.role || "User"}
+      ${persona?.description ? `Context: ${persona.description}` : ""}
+
       Analyze the screenshot and decide the next action.
       - If you see an element that helps complete the current task, click it.
       - If you are unsure, you can click to explore or wait.
       - If the task is complete, move to the next one.
       - Don't ever ask the user for questions or clarification. Just choose a path and continue.
       - There may be a red dot on the screen, which shows a previous place you tried to click. You can use that to guide your next click if it was missed.
+      - If the message history shows you've tried the same action more than 3 times, you should try a different action.
+      - Return the word "Done" when you have completed all the tasks.
 
       NOTE: Never click on "Continue with Google" or any other element outside the prototype screen.
       You should only be clicking within the device boundaries.
@@ -34,7 +41,7 @@ export async function POST(req: Request) {
         role: "system",
         content: systemPrompt,
       },
-      ...history,
+      ...(history || []).filter((h: any) => h !== null && h !== undefined),
       {
         role: "user",
         content: [
@@ -49,7 +56,7 @@ export async function POST(req: Request) {
       },
     ]
 
-    console.log("[OpenAI] Making API call to gpt-4o with", messages.length, "messages")
+    console.log("[OpenAI] Making API call to gpt-4.1 with", messages.length, "messages")
     
     const response = await openai.chat.completions.create({
       model: "gpt-4.1",

@@ -38,9 +38,7 @@ export default function NewTestPage() {
   const [prototypeType, setPrototypeType] = useState<"" | "live" | "figma">("")
   const [figmaUrl, setFigmaUrl] = useState("")
   const [liveUrl, setLiveUrl] = useState("")
-  const [validated, setValidated] = useState(false)
-  const [validating, setValidating] = useState(false)
-  const [validationProgress, setValidationProgress] = useState(0)
+
   const [tasks, setTasks] = useState<string[]>([])
   const [heuristics, setHeuristics] = useState({
     visibility: true,
@@ -82,26 +80,7 @@ export default function NewTestPage() {
     "Non-native English",
   ]
 
-  const handleValidate = () => {
-    setValidating(true)
-    setValidationProgress(0)
 
-    const interval = setInterval(() => {
-      setValidationProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          setValidating(false)
-          setValidated(true)
-          toast({
-            title: "Validation successful",
-            description: "Detected 8 screens and 24 interactive elements",
-          })
-          return 100
-        }
-        return prev + 10
-      })
-    }, 150)
-  }
 
   const handleNext = () => {
     const newErrors: Record<string, boolean> = {}
@@ -126,11 +105,19 @@ export default function NewTestPage() {
         isValid = false
       }
     } else if (currentStep === 3) {
-      if (prototypeType === "figma" && !figmaUrl.trim()) {
+      if (!prototypeType) {
+        newErrors.prototypeType = true
+        isValid = false
+      } else if (prototypeType === "figma" && !figmaUrl.trim()) {
         newErrors.figmaUrl = true
         isValid = false
       } else if (prototypeType === "live" && !liveUrl.trim()) {
         newErrors.liveUrl = true
+        isValid = false
+      }
+    } else if (currentStep === 4) {
+      if (tasks.length === 0) {
+        newErrors.tasks = true
         isValid = false
       }
     }
@@ -549,11 +536,11 @@ export default function NewTestPage() {
             <CardContent className="space-y-6">
               {!prototypeType && (
                 <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">Choose how you'd like to add your prototype:</p>
+                  <p className="text-sm text-muted-foreground">Choose how you'd like to add your prototype *</p>
                   <div className="grid gap-3 md:grid-cols-2">
                     <Button
                       variant="outline"
-                      className="h-24 flex flex-col gap-2 bg-transparent"
+                      className={`h-24 flex flex-col gap-2 bg-transparent ${errors.prototypeType ? "border-red-500" : ""}`}
                       onClick={() => setPrototypeType("live")}
                     >
                       <span className="font-semibold">Live URL</span>
@@ -561,7 +548,7 @@ export default function NewTestPage() {
                     </Button>
                     <Button
                       variant="outline"
-                      className="h-24 flex flex-col gap-2 bg-transparent"
+                      className={`h-24 flex flex-col gap-2 bg-transparent ${errors.prototypeType ? "border-red-500" : ""}`}
                       onClick={() => setPrototypeType("figma")}
                     >
                       <span className="font-semibold">Figma</span>
@@ -581,7 +568,7 @@ export default function NewTestPage() {
                       onClick={() => {
                         setPrototypeType("")
                         setFigmaUrl("")
-                        setValidated(false)
+                        setFigmaUrl("")
                       }}
                     >
                       Change
@@ -598,40 +585,7 @@ export default function NewTestPage() {
                     />
                   </div>
 
-                  {figmaUrl && !validated && !validating && (
-                    <Button onClick={handleValidate} className="w-full">
-                      Validate
-                    </Button>
-                  )}
 
-                  {validating && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Validating prototype...</span>
-                        <span className="font-medium">{validationProgress}%</span>
-                      </div>
-                      <Progress value={validationProgress} className="h-2" />
-                    </div>
-                  )}
-
-                  {validated && (
-                    <div className="p-4 rounded-lg border border-green-500/20 bg-green-500/10">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 flex-1">
-                          <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-foreground">Validation successful</p>
-                            <p className="text-sm text-muted-foreground">
-                              Detected 8 screens and 24 interactive elements
-                            </p>
-                          </div>
-                        </div>
-                        <Button variant="outline" size="sm" className="bg-background">
-                          Inspect
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -645,7 +599,7 @@ export default function NewTestPage() {
                       onClick={() => {
                         setPrototypeType("")
                         setLiveUrl("")
-                        setValidated(false)
+                        setLiveUrl("")
                       }}
                     >
                       Change
@@ -662,40 +616,7 @@ export default function NewTestPage() {
                     />
                   </div>
 
-                  {liveUrl && !validated && !validating && (
-                    <Button onClick={handleValidate} className="w-full">
-                      Validate
-                    </Button>
-                  )}
 
-                  {validating && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Validating website...</span>
-                        <span className="font-medium">{validationProgress}%</span>
-                      </div>
-                      <Progress value={validationProgress} className="h-2" />
-                    </div>
-                  )}
-
-                  {validated && (
-                    <div className="p-4 rounded-lg border border-green-500/20 bg-green-500/10">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 flex-1">
-                          <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-foreground">Validation successful</p>
-                            <p className="text-sm text-muted-foreground">
-                              Detected 8 screens and 24 interactive elements
-                            </p>
-                          </div>
-                        </div>
-                        <Button variant="outline" size="sm" className="bg-background">
-                          Inspect
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </CardContent>
@@ -706,7 +627,7 @@ export default function NewTestPage() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Tasks</CardTitle>
+                <CardTitle>Tasks *</CardTitle>
                 <CardDescription>Define the tasks users should complete</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -740,7 +661,7 @@ export default function NewTestPage() {
                 ))}
                 <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="w-full bg-transparent">
+                    <Button variant="outline" size="sm" className={`w-full bg-transparent ${errors.tasks ? "border-red-500" : ""}`}>
                       <Plus className="h-4 w-4 mr-2" />
                       Add Task
                     </Button>
@@ -901,19 +822,13 @@ export default function NewTestPage() {
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Prototype</h4>
                   <div className="space-y-1.5 text-sm">
-                    {validated && (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                          <span className="text-muted-foreground">
-                            {prototypeType === "figma" ? "Figma prototype" : "Live URL"}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                          <span className="text-muted-foreground">24 interactive elements detected</span>
-                        </div>
-                      </>
+                    {(figmaUrl || liveUrl) && (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <span className="text-muted-foreground">
+                          {prototypeType === "figma" ? "Figma prototype" : "Live URL"}
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
