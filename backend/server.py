@@ -10,8 +10,12 @@ from flask_cors import CORS
 import browser_controller
 import sys
 import traceback
+import logging
+
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 app = Flask(__name__)
+app.logger.setLevel(logging.DEBUG)
 # Enable CORS for all routes
 CORS(app)
 

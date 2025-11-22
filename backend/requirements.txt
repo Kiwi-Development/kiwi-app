@@ -3,3 +3,4 @@ playwright==1.55.0
 requests
 boto3
 flask_cors
+gunicorn

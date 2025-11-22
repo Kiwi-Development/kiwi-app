@@ -23,28 +23,19 @@ async def start_session(url: str) -> str:
         _browser = await _playwright.chromium.launch(
             headless=True,
             args=[
-            '--disable-dev-shm-usage',  # Important for Docker
-            '--no-sandbox',              # Often needed in containers
-            '--disable-setuid-sandbox',
-            '--disable-gpu',
-            '--disable-software-rasterizer',
-            '--disable-extensions',
-            '--disable-background-networking',
-            '--disable-default-apps',
-            '--disable-sync',
-            '--metrics-recording-only',
-            '--mute-audio',
-            '--no-first-run',
-            '--safebrowsing-disable-auto-update',
-            '--disable-blink-features=AutomationControlled'
-        ]
+                '--no-sandbox',
+                '--disable-dev-shm-usage',
+                '--use-gl=swiftshader',
+                '--enable-webgl',
+                '--ignore-gpu-blocklist',
+            ]
         )
         
     session_id = str(uuid.uuid4())
     print(f"Opening new page for session {session_id} and navigating to {url}...")
     
     page = await _browser.new_page()
-    await page.goto(url)
+    await page.goto(url, wait_until="networkidle")
     
     _sessions[session_id] = page
     print(f"Session {session_id} started.")
@@ -110,7 +101,7 @@ async def click_at(session_id: str, x: int, y: int) -> bool:
                     dot.style.transition = 'opacity 0.5s';
                     dot.style.opacity = '0';
                     setTimeout(() => dot.remove(), 500);
-                }, 10000);
+                }, 5000);
             }
         """, [x, y])
 
