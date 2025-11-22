@@ -1,0 +1,9 @@
+FROM mcr.microsoft.com/playwright/python:v1.55.0-noble
+
+COPY . /app
+WORKDIR /app
+
+RUN pip install --upgrade pip
+RUN pip install -r requirements.txt
+
+CMD ["sh", "-c", "python server.py $URL"]

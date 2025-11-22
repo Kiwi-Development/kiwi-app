@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Badge } from "../../../components/ui/badge"
 import { Plus, Trash2 } from "lucide-react"
 import { Input } from "../../../components/ui/input"
+import { Textarea } from "../../../components/ui/textarea"
 import { Label } from "../../../components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../../../components/ui/dialog"
 import { useToast } from "../../../hooks/use-toast"
@@ -20,6 +21,11 @@ export default function PersonasPage() {
   const [newPersonaName, setNewPersonaName] = useState("")
   const [newPersonaRole, setNewPersonaRole] = useState("")
   const [newPersonaTags, setNewPersonaTags] = useState<string[]>([])
+  const [newPersonaGoals, setNewPersonaGoals] = useState("")
+  const [newPersonaBehaviors, setNewPersonaBehaviors] = useState("")
+  const [newPersonaFrustrations, setNewPersonaFrustrations] = useState("")
+  const [newPersonaConstraints, setNewPersonaConstraints] = useState("")
+  const [newPersonaAccessibility, setNewPersonaAccessibility] = useState("")
   const { toast } = useToast()
 
   useEffect(() => {
@@ -53,6 +59,11 @@ export default function PersonasPage() {
         name: newPersonaName,
         role: newPersonaRole,
         tags: newPersonaTags,
+        goals: newPersonaGoals.split('\n').filter(Boolean),
+        behaviors: newPersonaBehaviors.split('\n').filter(Boolean),
+        frustrations: newPersonaFrustrations.split('\n').filter(Boolean),
+        constraints: newPersonaConstraints.split('\n').filter(Boolean),
+        accessibility: newPersonaAccessibility.split('\n').filter(Boolean),
       })
       setPersonas(personaStore.getPersonas())
       toast({
@@ -64,6 +75,11 @@ export default function PersonasPage() {
         name: newPersonaName,
         role: newPersonaRole,
         tags: newPersonaTags,
+        goals: newPersonaGoals.split('\n').filter(Boolean),
+        behaviors: newPersonaBehaviors.split('\n').filter(Boolean),
+        frustrations: newPersonaFrustrations.split('\n').filter(Boolean),
+        constraints: newPersonaConstraints.split('\n').filter(Boolean),
+        accessibility: newPersonaAccessibility.split('\n').filter(Boolean),
       })
       setPersonas([...personas, newPersona])
       toast({
@@ -77,6 +93,11 @@ export default function PersonasPage() {
     setNewPersonaName("")
     setNewPersonaRole("")
     setNewPersonaTags([])
+    setNewPersonaGoals("")
+    setNewPersonaBehaviors("")
+    setNewPersonaFrustrations("")
+    setNewPersonaConstraints("")
+    setNewPersonaAccessibility("")
     setEditingPersona(null)
 
     setPersonas(personaStore.getPersonas())
@@ -87,6 +108,11 @@ export default function PersonasPage() {
     setNewPersonaName(persona.name)
     setNewPersonaRole(persona.role)
     setNewPersonaTags([...persona.tags])
+    setNewPersonaGoals(persona.goals?.join('\n') || "")
+    setNewPersonaBehaviors(persona.behaviors?.join('\n') || "")
+    setNewPersonaFrustrations(persona.frustrations?.join('\n') || "")
+    setNewPersonaConstraints(persona.constraints?.join('\n') || "")
+    setNewPersonaAccessibility(persona.accessibility?.join('\n') || "")
     setPersonaDialogOpen(true)
   }
 
@@ -110,6 +136,11 @@ export default function PersonasPage() {
               setNewPersonaName("")
               setNewPersonaRole("")
               setNewPersonaTags([])
+              setNewPersonaGoals("")
+              setNewPersonaBehaviors("")
+              setNewPersonaFrustrations("")
+              setNewPersonaConstraints("")
+              setNewPersonaAccessibility("")
               setEditingPersona(null)
             }
           }}>
@@ -119,7 +150,7 @@ export default function PersonasPage() {
                 New Persona
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[525px]">
+            <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingPersona ? 'Edit Persona' : 'Create New Persona'}</DialogTitle>
                 <DialogDescription>
@@ -160,6 +191,58 @@ export default function PersonasPage() {
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground">Click tags to select/deselect</p>
+                </div>
+                  <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="persona-goals">Goals</Label>
+                    <Textarea
+                      id="persona-goals"
+                      value={newPersonaGoals}
+                      onChange={(e) => setNewPersonaGoals(e.target.value)}
+                      placeholder="e.g., Book a flight for under $300"
+                      className="min-h-[80px]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="persona-behaviors">Behaviors</Label>
+                    <Textarea
+                      id="persona-behaviors"
+                      value={newPersonaBehaviors}
+                      onChange={(e) => setNewPersonaBehaviors(e.target.value)}
+                      placeholder="e.g., Price compares across multiple tabs"
+                      className="min-h-[80px]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="persona-frustrations">Frustrations</Label>
+                    <Textarea
+                      id="persona-frustrations"
+                      value={newPersonaFrustrations}
+                      onChange={(e) => setNewPersonaFrustrations(e.target.value)}
+                      placeholder="e.g., Hidden fees at checkout"
+                      className="min-h-[80px]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="persona-constraints">Constraints</Label>
+                    <Textarea
+                      id="persona-constraints"
+                      value={newPersonaConstraints}
+                      onChange={(e) => setNewPersonaConstraints(e.target.value)}
+                      placeholder="e.g., Only has 15 minutes during lunch break"
+                      className="min-h-[80px]"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="persona-accessibility">Accessibility Needs</Label>
+                  <Textarea
+                    id="persona-accessibility"
+                    value={newPersonaAccessibility}
+                    onChange={(e) => setNewPersonaAccessibility(e.target.value)}
+                    placeholder="One need per line"
+                    className="min-h-[60px]"
+                  />
                 </div>
               </div>
               <div className="flex justify-end gap-3">

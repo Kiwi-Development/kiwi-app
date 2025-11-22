@@ -9,8 +9,8 @@ interface Step {
 const steps: Step[] = [
   { number: 1, title: "Basics" },
   { number: 2, title: "Persona & Use Case" },
-  { number: 3, title: "Artifacts" },
-  { number: 4, title: "Protocol & Tags" },
+  { number: 3, title: "Upload Prototype" },
+  { number: 4, title: "Protocol" },
   { number: 5, title: "Review & Run" },
 ]
 

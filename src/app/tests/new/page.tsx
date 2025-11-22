@@ -15,7 +15,7 @@ import { Slider } from "../../../../components/ui/slider"
 import { Checkbox } from "../../../../components/ui/checkbox"
 import { useToast } from "../../../../hooks/use-toast"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, GripVertical, Plus } from "lucide-react"
+import { CheckCircle2, GripVertical, Plus, Trash2 } from "lucide-react"
 import { testStore } from "../../../../lib/test-store"
 import {
   Dialog,
@@ -64,9 +64,19 @@ export default function NewTestPage() {
   const [newPersonaName, setNewPersonaName] = useState("")
   const [newPersonaRole, setNewPersonaRole] = useState("")
   const [newPersonaTags, setNewPersonaTags] = useState<string[]>([])
+  const [newPersonaGoals, setNewPersonaGoals] = useState("")
+  const [newPersonaBehaviors, setNewPersonaBehaviors] = useState("")
+  const [newPersonaFrustrations, setNewPersonaFrustrations] = useState("")
+  const [newPersonaConstraints, setNewPersonaConstraints] = useState("")
+  const [newPersonaAccessibility, setNewPersonaAccessibility] = useState("")
   const { toast } = useToast()
   const router = useRouter()
   const [selectedPersonas, setSelectedPersonas] = useState<string[]>([])
+  
+  // Task management state
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false)
+  const [newTaskContent, setNewTaskContent] = useState("")
+  const [draggedTaskIndex, setDraggedTaskIndex] = useState<number | null>(null)
 
   const availableTags = [
     "Non-technical",
@@ -131,6 +141,11 @@ export default function NewTestPage() {
     setNewPersonaName("")
     setNewPersonaRole("")
     setNewPersonaTags([])
+    setNewPersonaGoals("")
+    setNewPersonaBehaviors("")
+    setNewPersonaFrustrations("")
+    setNewPersonaConstraints("")
+    setNewPersonaAccessibility("")
   }
 
   const togglePersona = (personaId: string) => {
@@ -143,6 +158,40 @@ export default function NewTestPage() {
 
   const toggleTag = (tag: string) => {
     setNewPersonaTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
+  }
+
+  const handleAddTask = () => {
+    if (!newTaskContent.trim()) return
+    setTasks([...tasks, newTaskContent])
+    setNewTaskContent("")
+    setTaskDialogOpen(false)
+  }
+
+  const handleDeleteTask = (index: number) => {
+    const newTasks = [...tasks]
+    newTasks.splice(index, 1)
+    setTasks(newTasks)
+  }
+
+  const handleDragStart = (index: number) => {
+    setDraggedTaskIndex(index)
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    if (draggedTaskIndex === null || draggedTaskIndex === index) return
+
+    const newTasks = [...tasks]
+    const draggedTask = newTasks[draggedTaskIndex]
+    newTasks.splice(draggedTaskIndex, 1)
+    newTasks.splice(index, 0, draggedTask)
+    
+    setTasks(newTasks)
+    setDraggedTaskIndex(index)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedTaskIndex(null)
   }
 
   const handleRunSimulation = () => {
@@ -173,18 +222,20 @@ export default function NewTestPage() {
       title: testName,
       status: "running" as const,
       lastRun: "Just now",
-      personas: ["Jenny / Novice", "Jenny / Time-pressed", "Jenny / Keyboard-only"],
-      artifactType: "Figma",
+      personas: personaStore.getPersonas()
+        .filter(p => selectedPersonas.includes(p.id))
+        .map(p => `${p.name} / ${p.role}`),
+      artifactType: prototypeType === "figma" ? "Figma" : "Live URL",
       createdAt: Date.now(),
       testData: {
         testName,
         goal,
         environment,
         piiRedaction,
-        selectedPersona,
+        selectedPersonas,
         useCase,
         tasks,
-        figmaUrl,
+        figmaUrlA: figmaUrl,
         liveUrl,
       },
     }
@@ -239,7 +290,6 @@ export default function NewTestPage() {
                   placeholder="What decision will this inform?"
                   className="min-h-24"
                 />
-                <p className="text-xs text-muted-foreground">What decision will this inform?</p>
               </div>
 
               <div className="space-y-2">
@@ -331,36 +381,9 @@ export default function NewTestPage() {
                     <Badge variant="secondary">Keyboard-only</Badge>
                   </div>
                 </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>Mutation Level</Label>
-                    <span className="text-sm font-medium text-muted-foreground">{mutation[0]}</span>
-                  </div>
-                  <Slider value={mutation} onValueChange={setMutation} max={3} step={1} className="w-full" />
-                  <p className="text-xs text-muted-foreground">{getMutationDescription(mutation[0])}</p>
-                  <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground pt-1">
-                    <div className="text-center">
-                      0<br />
-                      Baseline
-                    </div>
-                    <div className="text-center">
-                      1<br />
-                      Minor
-                    </div>
-                    <div className="text-center">
-                      2<br />
-                      Moderate
-                    </div>
-                    <div className="text-center">
-                      3<br />
-                      High
-                    </div>
-                  </div>
-                </div>
               </CardContent>
               <Dialog open={personaDialogOpen} onOpenChange={setPersonaDialogOpen}>
-              <DialogContent className="sm:max-w-[525px]">
+              <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create New Persona</DialogTitle>
                   <DialogDescription>
@@ -402,6 +425,58 @@ export default function NewTestPage() {
                     </div>
                     <p className="text-xs text-muted-foreground">Click tags to select/deselect</p>
                   </div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="persona-goals">Goals</Label>
+                      <Textarea
+                        id="persona-goals"
+                        value={newPersonaGoals}
+                        onChange={(e) => setNewPersonaGoals(e.target.value)}
+                        placeholder="e.g., Book a flight for under $300"
+                        className="min-h-[80px]"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="persona-behaviors">Behaviors</Label>
+                      <Textarea
+                        id="persona-behaviors"
+                        value={newPersonaBehaviors}
+                        onChange={(e) => setNewPersonaBehaviors(e.target.value)}
+                        placeholder="e.g., Price compares across multiple tabs"
+                        className="min-h-[80px]"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="persona-frustrations">Frustrations</Label>
+                      <Textarea
+                        id="persona-frustrations"
+                        value={newPersonaFrustrations}
+                        onChange={(e) => setNewPersonaFrustrations(e.target.value)}
+                        placeholder="e.g., Hidden fees at checkout"
+                        className="min-h-[80px]"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="persona-constraints">Constraints</Label>
+                      <Textarea
+                        id="persona-constraints"
+                        value={newPersonaConstraints}
+                        onChange={(e) => setNewPersonaConstraints(e.target.value)}
+                        placeholder="e.g., Only has 15 minutes during lunch break"
+                        className="min-h-[80px]"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="persona-accessibility">Accessibility Needs</Label>
+                    <Textarea
+                      id="persona-accessibility"
+                      value={newPersonaAccessibility}
+                      onChange={(e) => setNewPersonaAccessibility(e.target.value)}
+                      placeholder="One need per line"
+                      className="min-h-[60px]"
+                    />
+                  </div>
                 </div>
                 <div className="flex justify-end gap-3">
                   <Button variant="outline" onClick={() => {
@@ -409,6 +484,11 @@ export default function NewTestPage() {
                     setNewPersonaName("")
                     setNewPersonaRole("")
                     setNewPersonaTags([])
+                    setNewPersonaGoals("")
+                    setNewPersonaBehaviors("")
+                    setNewPersonaFrustrations("")
+                    setNewPersonaConstraints("")
+                    setNewPersonaAccessibility("")
                   }}>
                     Cancel
                   </Button>
@@ -427,6 +507,11 @@ export default function NewTestPage() {
                         name: newPersonaName,
                         role: newPersonaRole,
                         tags: newPersonaTags,
+                        goals: newPersonaGoals.split('\n').filter(Boolean),
+                        behaviors: newPersonaBehaviors.split('\n').filter(Boolean),
+                        frustrations: newPersonaFrustrations.split('\n').filter(Boolean),
+                        constraints: newPersonaConstraints.split('\n').filter(Boolean),
+                        accessibility: newPersonaAccessibility.split('\n').filter(Boolean),
                       })
                       
                       setSelectedPersonas(prev => [...prev, newPersona.id])
@@ -434,6 +519,11 @@ export default function NewTestPage() {
                       setNewPersonaName("")
                       setNewPersonaRole("")
                       setNewPersonaTags([])
+                      setNewPersonaGoals("")
+                      setNewPersonaBehaviors("")
+                      setNewPersonaFrustrations("")
+                      setNewPersonaConstraints("")
+                      setNewPersonaAccessibility("")
                     }}
                   >
                     Create Persona
@@ -441,29 +531,6 @@ export default function NewTestPage() {
                 </div>
               </DialogContent>
             </Dialog>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Persona Variance Preview</CardTitle>
-                <CardDescription>Generated variants with behavioral agreement scores</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <span className="text-sm font-medium">Jenny / Novice</span>
-                    <Badge variant="outline">87% agreement</Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <span className="text-sm font-medium">Jenny / Time-pressed</span>
-                    <Badge variant="outline">82% agreement</Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <span className="text-sm font-medium">Jenny / Keyboard-only</span>
-                    <Badge variant="outline">91% agreement</Badge>
-                  </div>
-                </div>
-              </CardContent>
             </Card>
           </div>
         )}
@@ -637,18 +704,66 @@ export default function NewTestPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {tasks.map((task, index) => (
-                  <div key={index} className="flex items-start gap-3 p-3 rounded-lg border border-border">
-                    <GripVertical className="h-5 w-5 text-muted-foreground mt-1 flex-shrink-0" />
+                  <div 
+                    key={index} 
+                    className={`flex items-start gap-3 p-3 rounded-lg border border-border group bg-background ${
+                      draggedTaskIndex === index ? 'opacity-50' : ''
+                    }`}
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <div className="cursor-grab active:cursor-grabbing mt-1">
+                      <GripVertical className="h-5 w-5 text-muted-foreground" />
+                    </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium mb-1">Task {index + 1}</p>
                       <p className="text-sm text-muted-foreground">{task}</p>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity -mt-1 -mr-1"
+                      onClick={() => handleDeleteTask(index)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </div>
                 ))}
-                <Button variant="outline" size="sm" className="w-full bg-transparent">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Task
-                </Button>
+                <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="w-full bg-transparent">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Task
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Task</DialogTitle>
+                      <DialogDescription>
+                        Describe the task you want the persona to perform.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="task-content">Task Description</Label>
+                        <Textarea
+                          id="task-content"
+                          value={newTaskContent}
+                          onChange={(e) => setNewTaskContent(e.target.value)}
+                          placeholder="e.g., Find the cheapest flight to London"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-3">
+                      <Button variant="outline" onClick={() => setTaskDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleAddTask}>Add Task</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </CardContent>
             </Card>
 
@@ -730,18 +845,6 @@ export default function NewTestPage() {
                 </div>
               </CardContent>
             </Card>
-
-            <Card className="border-primary/20 bg-primary/5">
-              <CardContent className="flex items-center justify-between pt-6">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">Policy Enforcement</p>
-                  <p className="text-xs text-muted-foreground">
-                    High-severity findings require validation before merge
-                  </p>
-                </div>
-                <Switch checked={policyBanner} onCheckedChange={setPolicyBanner} />
-              </CardContent>
-            </Card>
           </div>
         )}
 
@@ -765,18 +868,30 @@ export default function NewTestPage() {
                       <span className="font-medium capitalize">{environment}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">PII Redaction:</span>
-                      <span className="font-medium">{piiRedaction ? "Enabled" : "Disabled"}</span>
+                      <span className="text-muted-foreground">Goal:</span>
+                      <span className="font-medium text-right max-w-[60%]">{goal}</span>
                     </div>
                   </div>
                 </div>
 
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Personas</h4>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="secondary">Jenny / Novice</Badge>
-                    <Badge variant="secondary">Jenny / Time-pressed</Badge>
-                    <Badge variant="secondary">Jenny / Keyboard-only</Badge>
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      {personaStore.getPersonas()
+                        .filter((p) => selectedPersonas.includes(p.id))
+                        .map((p) => (
+                          <Badge key={p.id} variant="secondary">
+                            {p.name} / {p.role}
+                          </Badge>
+                        ))}
+                      {selectedPersonas.length === 0 && (
+                        <span className="text-sm text-muted-foreground">No personas selected</span>
+                      )}
+                    </div>
+                    <div className="text-sm">
+                      <span className="text-muted-foreground block mb-1">Use Case: {useCase}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -810,16 +925,28 @@ export default function NewTestPage() {
                 </div>
 
                 <div>
+                  <h4 className="text-sm font-semibold mb-2">Heuristics</h4>
+                  <div className="space-y-1.5 text-sm text-muted-foreground">
+                    {Object.entries(heuristics)
+                      .filter(([_, enabled]) => enabled)
+                      .map(([key]) => {
+                        const labels: Record<string, string> = {
+                          visibility: "Visibility of system status",
+                          realWorld: "Match between system and real world",
+                          userControl: "User control and freedom",
+                          errorPrevention: "Error prevention",
+                          recognition: "Recognition over recall",
+                          consistency: "Consistency and standards",
+                          a11y: "Quick accessibility scan",
+                        }
+                        return <div key={key}>• {labels[key]}</div>
+                      })}
+                  </div>
+                </div>
+
+                <div>
                   <h4 className="text-sm font-semibold mb-2">Configuration</h4>
                   <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Mutation level:</span>
-                      <span className="font-medium">{mutation[0]}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Policy enforcement:</span>
-                      <span className="font-medium">{policyBanner ? "Enabled" : "Disabled"}</span>
-                    </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Max depth:</span>
                       <span className="font-medium">30 actions</span>
