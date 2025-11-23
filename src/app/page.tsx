@@ -10,7 +10,7 @@ import { SignUpModal } from "@/components/auth/SignUpModal"
 import { MousePointer2 } from "lucide-react"
 import Image from "next/image"
 import { toast } from "sonner"
-import { useState } from "react"
+import { useState, Suspense } from "react"
 
 function WaitlistForm() {
   const [email, setEmail] = useState("")
@@ -185,7 +185,9 @@ export default function Home() {
           {/* Gradient Overlay at bottom */}
           <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-white to-transparent pointer-events-none z-0"></div>
         </main>
-        <SignUpModal />
+        <Suspense fallback={null}>
+          <SignUpModal />
+        </Suspense>
       </div>
     </CalProvider>
   )
