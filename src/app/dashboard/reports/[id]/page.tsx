@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../..
 import { Badge } from "../../../../components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs"
 import { Textarea } from "../../../../components/ui/textarea"
-import { useToast } from "../../../../hooks/use-toast"
+import { useToast } from "../../../../../hooks/use-toast"
 import { Share2, FileDown, Play, CheckCircle2, XCircle, TrendingUp, RotateCcw, Target, X } from "lucide-react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useParams } from "next/navigation"
@@ -96,10 +96,10 @@ export default function ReportPage() {
   useEffect(() => {
     const test = testStore.getTestById(testId)
     setTestData(test)
-    
+
     if (test?.testData?.selectedPersona) {
-        const p = personaStore.getPersonas().find(p => p.id === test.testData!.selectedPersona)
-        setPersona(p)
+      const p = personaStore.getPersonas().find(p => p.id === test.testData!.selectedPersona)
+      setPersona(p)
     }
   }, [testId])
 
@@ -144,15 +144,15 @@ export default function ReportPage() {
   }, []);
 
   const handleCanPlay = useCallback(() => {
-      if (selectedTimestamp && videoRef.current) {
-        const timeInSeconds = getTimeInSeconds(selectedTimestamp);
-        videoRef.current.currentTime = timeInSeconds;
-        videoRef.current.muted = true; // Mute for autoplay
-        videoRef.current.play().catch(e => {
-          console.log("Autoplay blocked, user interaction required");
-        });
-      }
-    }, [selectedTimestamp, getTimeInSeconds]);
+    if (selectedTimestamp && videoRef.current) {
+      const timeInSeconds = getTimeInSeconds(selectedTimestamp);
+      videoRef.current.currentTime = timeInSeconds;
+      videoRef.current.muted = true; // Mute for autoplay
+      videoRef.current.play().catch(e => {
+        console.log("Autoplay blocked, user interaction required");
+      });
+    }
+  }, [selectedTimestamp, getTimeInSeconds]);
 
   // Handle video events
   useEffect(() => {
@@ -173,7 +173,7 @@ export default function ReportPage() {
 
     // Initial setup
     if (selectedTimestamp) {
-    const timeInSeconds = getTimeInSeconds(selectedTimestamp);
+      const timeInSeconds = getTimeInSeconds(selectedTimestamp);
       if (video.readyState >= 2) {
         video.currentTime = timeInSeconds;
         video.muted = true;
@@ -183,12 +183,12 @@ export default function ReportPage() {
 
     return () => {
       video.removeEventListener('canplay', handleCanPlay);
-      video.removeEventListener('play', () => {});
-      video.removeEventListener('pause', () => {});
-      video.removeEventListener('timeupdate', () => {});
-      video.removeEventListener('durationchange', () => {});
-      video.removeEventListener('seeking', () => {});
-      video.removeEventListener('seeked', () => {});
+      video.removeEventListener('play', () => { });
+      video.removeEventListener('pause', () => { });
+      video.removeEventListener('timeupdate', () => { });
+      video.removeEventListener('durationchange', () => { });
+      video.removeEventListener('seeking', () => { });
+      video.removeEventListener('seeked', () => { });
     };
   }, [handleCanPlay, selectedTimestamp, getTimeInSeconds]);
 
@@ -324,41 +324,41 @@ export default function ReportPage() {
     <div className="min-h-screen bg-background">
       <AppLayout>
 
-      <main className="container mx-auto p-6 space-y-8">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight">{testData?.title || "Evaluations Page Design A"}</h1>
-            <div className="flex items-center gap-3">
-              <div className="flex gap-2">
-                {persona ? (
-                  <>
-                    <Badge variant="secondary">{persona.name}</Badge>
-                    {persona.tags.map((tag: string) => (
-                      <Badge key={tag} variant="outline">{tag}</Badge>
-                    ))}
-                  </>
-                ) : (
-                  <Badge variant="secondary">Loading Persona...</Badge>
-                )}
+        <main className="container mx-auto p-6 space-y-8">
+          <div className="flex items-start justify-between">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-bold tracking-tight">{testData?.title || "Evaluations Page Design A"}</h1>
+              <div className="flex items-center gap-3">
+                <div className="flex gap-2">
+                  {persona ? (
+                    <>
+                      <Badge variant="secondary">{persona.name}</Badge>
+                      {persona.tags.map((tag: string) => (
+                        <Badge key={tag} variant="outline">{tag}</Badge>
+                      ))}
+                    </>
+                  ) : (
+                    <Badge variant="secondary">Loading Persona...</Badge>
+                  )}
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  • {testData?.completedAt ? `Completed ${formatTimeAgo(testData.completedAt)}` : "Running"}
+                </span>
               </div>
-              <span className="text-sm text-muted-foreground">
-                • {testData?.completedAt ? `Completed ${formatTimeAgo(testData.completedAt)}` : "Running"}
-              </span>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleShare}>
+                <Share2 className="h-4 w-4 mr-2" />
+                Share
+              </Button>
+              <Button variant="outline" onClick={handleExport}>
+                <FileDown className="h-4 w-4 mr-2" />
+                Export PDF
+              </Button>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleShare}>
-              <Share2 className="h-4 w-4 mr-2" />
-              Share
-            </Button>
-            <Button variant="outline" onClick={handleExport}>
-              <FileDown className="h-4 w-4 mr-2" />
-              Export PDF
-            </Button>
-          </div>
-        </div>
 
-        <div className="space-y-6 mt-6">
+          <div className="space-y-6 mt-6">
             <div className="grid gap-6 md:grid-cols-3">
               <Card className="w-full">
                 <CardHeader className="pb-3">
@@ -576,31 +576,31 @@ export default function ReportPage() {
               </CardContent>
             </Card>
 
-        </div>
-      </main>
-
-      <Dialog open={videoDialogOpen} onOpenChange={setVideoDialogOpen}>
-        <DialogContent className="max-w-6xl p-0 bg-black/90 border-0">
-          <DialogTitle className="sr-only">Video Player</DialogTitle>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white"
-            onClick={() => setVideoDialogOpen(false)}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-          <div className="p-4">
-            <ReplayPlayer
-              videoUrl="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/test_video-UOVNF3qfZLAN4grybvKaejGMEHvvPG.mp4"
-              events={[]}
-              initialTime={selectedTimestamp ? getTimeInSeconds(selectedTimestamp) : 0}
-              onSeek={(time) => setSelectedTimestamp(time.toString())}
-            />
           </div>
-        </DialogContent>
-      </Dialog>
-    </AppLayout>
+        </main>
+
+        <Dialog open={videoDialogOpen} onOpenChange={setVideoDialogOpen}>
+          <DialogContent className="max-w-6xl p-0 bg-black/90 border-0">
+            <DialogTitle className="sr-only">Video Player</DialogTitle>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white"
+              onClick={() => setVideoDialogOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            <div className="p-4">
+              <ReplayPlayer
+                videoUrl="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/test_video-UOVNF3qfZLAN4grybvKaejGMEHvvPG.mp4"
+                events={[]}
+                initialTime={selectedTimestamp ? getTimeInSeconds(selectedTimestamp) : 0}
+                onSeek={(time) => setSelectedTimestamp(time.toString())}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      </AppLayout>
     </div>
   )
 }

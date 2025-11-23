@@ -3,10 +3,9 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react"
 import { Button } from "../../../../../components/ui/button"
 import { Slider } from "../../../../../components/ui/slider"
-import { Badge } from "../../../../../components/ui/badge"
 import { Play, Pause, SkipBack, SkipForward, LinkIcon, Volume2, VolumeX, Maximize, Minimize } from "lucide-react"
 import type { RunEvent } from "../model"
-import { useToast } from "../../../../../hooks/use-toast"
+import { useToast } from "../../../../../../hooks/use-toast"
 import { MarkerBar } from "./marker-bar"
 
 interface ReplayPlayerProps {

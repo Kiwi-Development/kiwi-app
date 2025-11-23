@@ -8,12 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../..
 import { Input } from "../../../../components/ui/input"
 import { Label } from "../../../../components/ui/label"
 import { Textarea } from "../../../../components/ui/textarea"
-import { Switch } from "../../../../components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../../components/ui/select"
 import { Badge } from "../../../../components/ui/badge"
-import { Slider } from "../../../../components/ui/slider"
 import { Checkbox } from "../../../../components/ui/checkbox"
-import { useToast } from "../../../../hooks/use-toast"
+import { useToast } from "../../../../../hooks/use-toast"
 import { useRouter } from "next/navigation"
 import { CheckCircle2, GripVertical, Plus, Trash2 } from "lucide-react"
 import { testStore } from "../../../../lib/test-store"
@@ -25,7 +22,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../../../../components/ui/dialog"
-import { Progress } from "../../../../components/ui/progress"
 import { personaStore, type Persona } from "../../../../lib/persona-store"
 
 export default function NewTestPage() {
@@ -63,7 +59,7 @@ export default function NewTestPage() {
   const router = useRouter()
   const [selectedPersona, setSelectedPersona] = useState<string>("")
   const [errors, setErrors] = useState<Record<string, boolean>>({})
-  
+
   // Task management state
   const [taskDialogOpen, setTaskDialogOpen] = useState(false)
   const [newTaskContent, setNewTaskContent] = useState("")
@@ -194,7 +190,7 @@ export default function NewTestPage() {
     const draggedTask = newTasks[draggedTaskIndex]
     newTasks.splice(draggedTaskIndex, 1)
     newTasks.splice(index, 0, draggedTask)
-    
+
     setTasks(newTasks)
     setDraggedTaskIndex(index)
   }
@@ -204,27 +200,27 @@ export default function NewTestPage() {
   }
 
   const handleRunSimulation = () => {
-  //   if (selectedPersonas.length === 0) {
-  //     toast({
-  //       title: "Error",
-  //       description: "Please select at least one persona",
-  //       variant: "destructive",
-  //     })
-  //     return
-  //   }
+    //   if (selectedPersonas.length === 0) {
+    //     toast({
+    //       title: "Error",
+    //       description: "Please select at least one persona",
+    //       variant: "destructive",
+    //     })
+    //     return
+    //   }
 
-  // const selectedPersonaDetails = personaStore.getPersonas()
-  //   .filter(p => selectedPersonas.includes(p.id))
-  //   .map(p => p.name)
+    // const selectedPersonaDetails = personaStore.getPersonas()
+    //   .filter(p => selectedPersonas.includes(p.id))
+    //   .map(p => p.name)
 
-  //   if (selectedPersonaDetails.length === 0) {
-  //     toast({
-  //       title: "Error",
-  //       description: "No valid personas selected",
-  //       variant: "destructive",
-  //     })
-  //     return
-  //   }
+    //   if (selectedPersonaDetails.length === 0) {
+    //     toast({
+    //       title: "Error",
+    //       description: "No valid personas selected",
+    //       variant: "destructive",
+    //     })
+    //     return
+    //   }
 
     const newTest = {
       id: Date.now().toString(),
@@ -254,7 +250,7 @@ export default function NewTestPage() {
       title: "Simulation started",
       description: "Running test with 3 persona variants",
     })
-    router.push(`/runs/${newTest.id}`)
+    router.push(`/dashboard/runs/${newTest.id}`)
   }
 
   const getMutationDescription = (level: number) => {
@@ -317,18 +313,16 @@ export default function NewTestPage() {
                   <Label>Select Persona *</Label>
                   <div className={`space-y-2 ${errors.selectedPersona ? "border border-red-500 rounded-lg p-2" : ""}`}>
                     {personaStore.getPersonas().map((persona) => (
-                      <div 
+                      <div
                         key={persona.id}
-                        className={`flex items-center space-x-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                          selectedPersona === persona.id
-                            ? 'bg-primary/10 border-primary'
-                            : 'hover:bg-accent/50'
-                        }`}
+                        className={`flex items-center space-x-3 rounded-lg border p-3 cursor-pointer transition-colors ${selectedPersona === persona.id
+                          ? 'bg-primary/10 border-primary'
+                          : 'hover:bg-accent/50'
+                          }`}
                         onClick={() => selectPersona(persona.id)}
                       >
-                        <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
-                          selectedPersona === persona.id ? 'border-primary' : 'border-input'
-                        }`}>
+                        <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${selectedPersona === persona.id ? 'border-primary' : 'border-input'
+                          }`}>
                           {selectedPersona === persona.id && (
                             <div className="h-3 w-3 rounded-full bg-primary" />
                           )}
@@ -342,9 +336,9 @@ export default function NewTestPage() {
                       </div>
                     ))}
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="mt-2 bg-transparent"
                     onClick={() => setPersonaDialogOpen(true)}
                   >
@@ -375,138 +369,103 @@ export default function NewTestPage() {
                 </div>
               </CardContent>
               <Dialog open={personaDialogOpen} onOpenChange={setPersonaDialogOpen}>
-              <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Create New Persona</DialogTitle>
-                  <DialogDescription>
-                    Add a new user persona for testing. Personas help simulate different user behaviors.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="persona-name">Name *</Label>
-                    <Input
-                      id="persona-name"
-                      value={newPersonaName}
-                      onChange={(e) => setNewPersonaName(e.target.value)}
-                      placeholder="e.g., Alex Chen"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="persona-role">Role *</Label>
-                    <Input
-                      id="persona-role"
-                      value={newPersonaRole}
-                      onChange={(e) => setNewPersonaRole(e.target.value)}
-                      placeholder="e.g., Marketing Manager"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Tags</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {availableTags.map((tag) => (
-                        <Badge
-                          key={tag}
-                          variant={newPersonaTags.includes(tag) ? "default" : "outline"}
-                          className="cursor-pointer"
-                          onClick={() => toggleTag(tag)}
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Click tags to select/deselect</p>
-                  </div>
-                  <div className="space-y-4">
+                <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Create New Persona</DialogTitle>
+                    <DialogDescription>
+                      Add a new user persona for testing. Personas help simulate different user behaviors.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="persona-goals">Goals</Label>
-                      <Textarea
-                        id="persona-goals"
-                        value={newPersonaGoals}
-                        onChange={(e) => setNewPersonaGoals(e.target.value)}
-                        placeholder="e.g., Book a flight for under $300"
-                        className="min-h-[80px]"
+                      <Label htmlFor="persona-name">Name *</Label>
+                      <Input
+                        id="persona-name"
+                        value={newPersonaName}
+                        onChange={(e) => setNewPersonaName(e.target.value)}
+                        placeholder="e.g., Alex Chen"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="persona-behaviors">Behaviors</Label>
-                      <Textarea
-                        id="persona-behaviors"
-                        value={newPersonaBehaviors}
-                        onChange={(e) => setNewPersonaBehaviors(e.target.value)}
-                        placeholder="e.g., Price compares across multiple tabs"
-                        className="min-h-[80px]"
+                      <Label htmlFor="persona-role">Role *</Label>
+                      <Input
+                        id="persona-role"
+                        value={newPersonaRole}
+                        onChange={(e) => setNewPersonaRole(e.target.value)}
+                        placeholder="e.g., Marketing Manager"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="persona-frustrations">Frustrations</Label>
-                      <Textarea
-                        id="persona-frustrations"
-                        value={newPersonaFrustrations}
-                        onChange={(e) => setNewPersonaFrustrations(e.target.value)}
-                        placeholder="e.g., Hidden fees at checkout"
-                        className="min-h-[80px]"
-                      />
+                      <Label>Tags</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {availableTags.map((tag) => (
+                          <Badge
+                            key={tag}
+                            variant={newPersonaTags.includes(tag) ? "default" : "outline"}
+                            className="cursor-pointer"
+                            onClick={() => toggleTag(tag)}
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Click tags to select/deselect</p>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="persona-goals">Goals</Label>
+                        <Textarea
+                          id="persona-goals"
+                          value={newPersonaGoals}
+                          onChange={(e) => setNewPersonaGoals(e.target.value)}
+                          placeholder="e.g., Book a flight for under $300"
+                          className="min-h-[80px]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="persona-behaviors">Behaviors</Label>
+                        <Textarea
+                          id="persona-behaviors"
+                          value={newPersonaBehaviors}
+                          onChange={(e) => setNewPersonaBehaviors(e.target.value)}
+                          placeholder="e.g., Price compares across multiple tabs"
+                          className="min-h-[80px]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="persona-frustrations">Frustrations</Label>
+                        <Textarea
+                          id="persona-frustrations"
+                          value={newPersonaFrustrations}
+                          onChange={(e) => setNewPersonaFrustrations(e.target.value)}
+                          placeholder="e.g., Hidden fees at checkout"
+                          className="min-h-[80px]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="persona-constraints">Constraints</Label>
+                        <Textarea
+                          id="persona-constraints"
+                          value={newPersonaConstraints}
+                          onChange={(e) => setNewPersonaConstraints(e.target.value)}
+                          placeholder="e.g., Only has 15 minutes during lunch break"
+                          className="min-h-[80px]"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="persona-constraints">Constraints</Label>
+                      <Label htmlFor="persona-accessibility">Accessibility Needs</Label>
                       <Textarea
-                        id="persona-constraints"
-                        value={newPersonaConstraints}
-                        onChange={(e) => setNewPersonaConstraints(e.target.value)}
-                        placeholder="e.g., Only has 15 minutes during lunch break"
-                        className="min-h-[80px]"
+                        id="persona-accessibility"
+                        value={newPersonaAccessibility}
+                        onChange={(e) => setNewPersonaAccessibility(e.target.value)}
+                        placeholder="One need per line"
+                        className="min-h-[60px]"
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="persona-accessibility">Accessibility Needs</Label>
-                    <Textarea
-                      id="persona-accessibility"
-                      value={newPersonaAccessibility}
-                      onChange={(e) => setNewPersonaAccessibility(e.target.value)}
-                      placeholder="One need per line"
-                      className="min-h-[60px]"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3">
-                  <Button variant="outline" onClick={() => {
-                    setPersonaDialogOpen(false)
-                    setNewPersonaName("")
-                    setNewPersonaRole("")
-                    setNewPersonaTags([])
-                    setNewPersonaGoals("")
-                    setNewPersonaBehaviors("")
-                    setNewPersonaFrustrations("")
-                    setNewPersonaConstraints("")
-                    setNewPersonaAccessibility("")
-                  }}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={() => {
-                      if (!newPersonaName || !newPersonaRole) {
-                        toast({
-                          title: "Error",
-                          description: "Please fill in name and role",
-                          variant: "destructive",
-                        })
-                        return
-                      }
-                      
-                      const newPersona = personaStore.addPersona({
-                        name: newPersonaName,
-                        role: newPersonaRole,
-                        tags: newPersonaTags,
-                        goals: newPersonaGoals.split('\n').filter(Boolean),
-                        behaviors: newPersonaBehaviors.split('\n').filter(Boolean),
-                        frustrations: newPersonaFrustrations.split('\n').filter(Boolean),
-                        constraints: newPersonaConstraints.split('\n').filter(Boolean),
-                        accessibility: newPersonaAccessibility.split('\n').filter(Boolean),
-                      })
-                      
-                      setSelectedPersona(newPersona.id)
+                  <div className="flex justify-end gap-3">
+                    <Button variant="outline" onClick={() => {
                       setPersonaDialogOpen(false)
                       setNewPersonaName("")
                       setNewPersonaRole("")
@@ -516,13 +475,48 @@ export default function NewTestPage() {
                       setNewPersonaFrustrations("")
                       setNewPersonaConstraints("")
                       setNewPersonaAccessibility("")
-                    }}
-                  >
-                    Create Persona
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+                    }}>
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        if (!newPersonaName || !newPersonaRole) {
+                          toast({
+                            title: "Error",
+                            description: "Please fill in name and role",
+                            variant: "destructive",
+                          })
+                          return
+                        }
+
+                        const newPersona = personaStore.addPersona({
+                          name: newPersonaName,
+                          role: newPersonaRole,
+                          tags: newPersonaTags,
+                          goals: newPersonaGoals.split('\n').filter(Boolean),
+                          behaviors: newPersonaBehaviors.split('\n').filter(Boolean),
+                          frustrations: newPersonaFrustrations.split('\n').filter(Boolean),
+                          constraints: newPersonaConstraints.split('\n').filter(Boolean),
+                          accessibility: newPersonaAccessibility.split('\n').filter(Boolean),
+                        })
+
+                        setSelectedPersona(newPersona.id)
+                        setPersonaDialogOpen(false)
+                        setNewPersonaName("")
+                        setNewPersonaRole("")
+                        setNewPersonaTags([])
+                        setNewPersonaGoals("")
+                        setNewPersonaBehaviors("")
+                        setNewPersonaFrustrations("")
+                        setNewPersonaConstraints("")
+                        setNewPersonaAccessibility("")
+                      }}
+                    >
+                      Create Persona
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </Card>
           </div>
         )}
@@ -632,11 +626,10 @@ export default function NewTestPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {tasks.map((task, index) => (
-                  <div 
-                    key={index} 
-                    className={`flex items-start gap-3 p-3 rounded-lg border border-border group bg-background ${
-                      draggedTaskIndex === index ? 'opacity-50' : ''
-                    }`}
+                  <div
+                    key={index}
+                    className={`flex items-start gap-3 p-3 rounded-lg border border-border group bg-background ${draggedTaskIndex === index ? 'opacity-50' : ''
+                      }`}
                     draggable
                     onDragStart={() => handleDragStart(index)}
                     onDragOver={(e) => handleDragOver(e, index)}
