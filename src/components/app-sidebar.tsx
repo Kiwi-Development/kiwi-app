@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "../lib/utils"
-import { Home, Target, Users, Settings } from "lucide-react"
+import { Target, Users, Settings } from "lucide-react"
 import Image from "next/image"
 
 interface AppSidebarProps {
@@ -14,18 +14,18 @@ export function AppSidebar({ onNavClick }: AppSidebarProps) {
   const pathname = usePathname()
 
   const navLinks = [
-    { 
-      href: "/tests", 
+    {
+      href: "/dashboard/tests",
       label: "Tests",
       icon: Target
     },
-    { 
-      href: "/personas", 
+    {
+      href: "/dashboard/personas",
       label: "Personas",
       icon: Users
     },
-    { 
-      href: "/settings", 
+    {
+      href: "/dashboard/settings",
       label: "Settings",
       icon: Settings
     },
@@ -34,8 +34,8 @@ export function AppSidebar({ onNavClick }: AppSidebarProps) {
   return (
     <div className="h-full w-full flex flex-col border-r border-border bg-sidebar/95 text-sidebar-foreground">
       <div className="flex h-20 items-center px-6">
-        <Link 
-          href="/" 
+        <Link
+          href="/"
           className="flex items-center gap-2"
           onClick={onNavClick}
         >
@@ -59,8 +59,8 @@ export function AppSidebar({ onNavClick }: AppSidebarProps) {
               onClick={onNavClick}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive 
-                  ? "bg-accent text-accent-foreground" 
+                isActive
+                  ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground",
                 "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
               )}

@@ -50,9 +50,8 @@ export function EventTimeline({ events, onEventClick, highlightedEventId }: Even
             <TooltipTrigger asChild>
               <button
                 onClick={() => onEventClick(event)}
-                className={`flex-shrink-0 transition-all ${
-                  highlightedEventId === event.id ? "ring-2 ring-primary ring-offset-2" : ""
-                }`}
+                className={`flex-shrink-0 transition-all ${highlightedEventId === event.id ? "ring-2 ring-primary ring-offset-2" : ""
+                  }`}
                 data-testid={`timeline-event-${event.id}`}
                 aria-label={`${event.label} at ${formatTime(event.t)}`}
               >

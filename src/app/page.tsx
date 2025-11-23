@@ -1,12 +1,13 @@
 "use client"
 
-import { Button } from "../../components/ui/button"
-import { Input } from "../../components/ui/input"
-import { Badge } from "../../components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar"
-import { CalProvider, CalButton } from "../../components/Cal"
+import { Button } from "../components/ui/button"
+import { Input } from "../components/ui/input"
+import { Badge } from "../components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar"
+import { CalProvider, CalButton } from "../components/Cal"
+import { LoginModal } from "@/components/auth/LoginModal"
+import { SignUpModal } from "@/components/auth/SignUpModal"
 import { MousePointer2 } from "lucide-react"
-import Link from "next/link"
 import Image from "next/image"
 import { toast } from "sonner"
 import { useState } from "react"
@@ -107,13 +108,20 @@ export default function Home() {
           {/* Header */}
           <header className="flex justify-between items-center p-6 max-w-7xl mx-auto w-full relative z-10">
             <Logo />
-            <CalButton
-              calLink="ilyssa-yan-q9leex/15min"
-              config={{ layout: "month_view" }}
-              className="bg-[#F34822] hover:bg-[#F34822]/90 text-white rounded-full px-6 font-medium h-10 py-2"
-            >
-              Book a Demo
-            </CalButton>
+            <div className="flex items-center gap-4">
+              <CalButton
+                calLink="ilyssa-yan-q9leex/15min"
+                config={{ layout: "month_view" }}
+                className="bg-[#F34822] hover:bg-[#F34822]/90 text-white rounded-full px-6 font-medium h-10 py-2"
+              >
+                Book a Demo
+              </CalButton>
+              <LoginModal>
+                <Button variant="ghost" className="rounded-full font-medium text-base px-6">
+                  Log in
+                </Button>
+              </LoginModal>
+            </div>
           </header>
 
           {/* Hero Section */}
@@ -177,6 +185,7 @@ export default function Home() {
           {/* Gradient Overlay at bottom */}
           <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-white to-transparent pointer-events-none z-0"></div>
         </main>
+        <SignUpModal />
       </div>
     </CalProvider>
   )
