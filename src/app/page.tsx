@@ -117,7 +117,7 @@ export default function Home() {
                 Book a Demo
               </CalButton>
               <LoginModal>
-                <Button variant="ghost" className="rounded-full font-medium text-base px-6">
+                <Button variant="ghost" className="rounded-full font-normal text-base px-6 h-10 py-2 bg-white border shadow-sm hover:bg-white">
                   Log in
                 </Button>
               </LoginModal>
