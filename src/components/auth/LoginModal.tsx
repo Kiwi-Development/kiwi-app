@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "../../lib/supabase"
+import { useSupabaseClient } from "@supabase/auth-helpers-react"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import {
@@ -25,6 +25,7 @@ export function LoginModal({ children }: LoginModalProps) {
     const [loading, setLoading] = useState(false)
     const [open, setOpen] = useState(false)
     const router = useRouter()
+    const supabase = useSupabaseClient()
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault()

@@ -3,7 +3,11 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function proxy(req: NextRequest) {
-    const res = NextResponse.next()
+    const res = NextResponse.next({
+        request: {
+            headers: req.headers,
+        },
+    })
     const supabase = createMiddlewareClient({ req, res })
 
     // Refresh session if expired - required for Server Components
@@ -13,7 +17,9 @@ export async function proxy(req: NextRequest) {
         error,
     } = await supabase.auth.getUser()
 
-    console.log(user, error);
+    // console.log("Incoming cookies", req.cookies.getAll())
+    // console.log("User:", user)
+    // console.log("Error:", error)
 
     // If user is not signed in and the current path is /dashboard, redirect the user to /
     // if ((error || !user) && req.nextUrl.pathname.startsWith('/dashboard')) {
