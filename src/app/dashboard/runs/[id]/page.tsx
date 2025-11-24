@@ -417,7 +417,7 @@ export default function LiveRunPage() {
         if (!simulationRef.current) break
         if (activeExecutionIdRef.current !== executionId) break
 
-        const decideRes = await fetch(`/runs/${testId}/api`, {
+        const decideRes = await fetch(`/dashboard/runs/${testId}/api`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
