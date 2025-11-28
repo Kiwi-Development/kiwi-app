@@ -9,9 +9,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden print:h-auto print:overflow-visible">
       {/* Mobile menu button */}
-      <div className="md:hidden fixed top-4 left-4 z-50">
+      <div className="md:hidden fixed top-4 left-4 z-50 print:hidden">
         <Button
           variant="outline"
           size="icon"
@@ -25,7 +25,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* Mobile sidebar overlay */}
       {mobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/50 z-40 md:hidden print:hidden"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
@@ -34,7 +34,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <div 
         className={`fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:hidden`}
+        } md:hidden print:hidden`}
       >
         <div className="h-full bg-sidebar text-sidebar-foreground">
           <AppSidebar onNavClick={() => setMobileMenuOpen(false)} />
@@ -42,13 +42,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </div>
 
       {/* Desktop sidebar */}
-      <div className="hidden md:flex">
+      <div className="hidden md:flex print:hidden">
         <AppSidebar />
       </div>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <div className="h-full p-6">
+      <main className="flex-1 overflow-auto print:overflow-visible print:h-auto">
+        <div className="h-full p-6 print:p-0 print:h-auto">
           {children}
         </div>
       </main>

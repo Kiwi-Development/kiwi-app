@@ -341,6 +341,7 @@ export default function LiveRunPage() {
         test.completedAt = endTime
         test.duration = endTime - startedAtRef.current
         test.actionCount = stateRef.current.events.filter(e => e.type === "click").length
+        test.successRate = 100 // Test completed successfully
 
         testStore.saveTest(test)
       }
@@ -464,6 +465,22 @@ export default function LiveRunPage() {
 
               // Use Server Action for click
               await proxyClick(sessionId, args.x, args.y)
+            } else if (toolCall.function.name === "submit_findings") {
+              const args = JSON.parse(toolCall.function.arguments)
+              console.log("Agent submitted findings:", args)
+              
+              const findings = args.findings || []
+              const feedback = args.generalFeedback || "Test completed."
+
+              // Update test with findings
+              const test = testStore.getTestById(testId)
+              if (test) {
+                test.findings = findings
+                testStore.saveTest(test)
+              }
+
+              handleCompletion(feedback)
+              break
             }
           }
 

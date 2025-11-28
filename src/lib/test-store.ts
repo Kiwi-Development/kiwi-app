@@ -25,6 +25,14 @@ type Test = {
     estimatedDuration: number // in milliseconds
   }
   feedback?: string
+  findings?: {
+    title: string
+    severity: "High" | "Med" | "Low"
+    confidence: number
+    description: string
+    suggestedFix: string
+    affectingTasks: string[]
+  }[]
   duration?: number // in milliseconds
   actionCount?: number
   completedAt?: number

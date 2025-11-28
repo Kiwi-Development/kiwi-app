@@ -35,7 +35,7 @@ export function AppSidebar({ onNavClick }: AppSidebarProps) {
     <div className="h-full w-full flex flex-col border-r border-border bg-sidebar/95 text-sidebar-foreground">
       <div className="flex h-20 items-center px-6">
         <Link
-          href="/"
+          href="/dashboard/tests"
           className="flex items-center gap-2"
           onClick={onNavClick}
         >

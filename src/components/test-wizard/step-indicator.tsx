@@ -21,18 +21,18 @@ interface StepIndicatorProps {
 export function StepIndicator({ currentStep }: StepIndicatorProps) {
   return (
     <nav aria-label="Progress" className="px-6 py-8 bg-card border-b border-border">
-      <ol className="flex items-center justify-between max-w-5xl mx-auto">
+      <ol className="flex items-center justify-between max-w-4xl mx-auto">
         {steps.map((step, stepIdx) => (
-          <li key={step.number} className={cn("relative flex-1", stepIdx !== steps.length - 1 ? "pr-8" : "")}>
-            <div className="flex items-center">
+          <li key={step.number} className={cn("relative flex flex-col items-center flex-1", stepIdx !== steps.length - 1 ? "" : "")}>
+            <div className="flex items-center justify-center relative z-10">
               <div
                 className={cn(
-                  "relative flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors",
+                  "relative flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors bg-background",
                   step.number < currentStep
                     ? "border-primary bg-primary"
                     : step.number === currentStep
-                      ? "border-primary bg-background"
-                      : "border-border bg-background",
+                      ? "border-primary"
+                      : "border-border",
                 )}
               >
                 {step.number < currentStep ? (
@@ -48,16 +48,16 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
                   </span>
                 )}
               </div>
-              {stepIdx !== steps.length - 1 && (
-                <div
-                  className={cn(
-                    "absolute top-5 left-10 -ml-px h-0.5 w-full transition-colors",
-                    step.number < currentStep ? "bg-primary" : "bg-border",
-                  )}
-                />
-              )}
             </div>
-            <div className="mt-3">
+            {stepIdx !== steps.length - 1 && (
+              <div
+                className={cn(
+                  "absolute top-5 left-1/2 h-0.5 w-full -translate-y-1/2 transition-colors",
+                  step.number < currentStep ? "bg-primary" : "bg-border",
+                )}
+              />
+            )}
+            <div className="mt-3 text-center">
               <span
                 className={cn(
                   "text-sm font-medium",

@@ -61,6 +61,26 @@ export default function TestsPage() {
     return test.successRate || 0
   }
 
+  const formatTimeAgo = (timestamp: number): string => {
+    const now = Date.now()
+    const diff = now - timestamp
+    const minutes = Math.floor(diff / 60000)
+    const hours = Math.floor(diff / 3600000)
+    const days = Math.floor(diff / 86400000)
+
+    if (minutes < 1) return "Just now"
+    if (minutes < 60) return `${minutes}m ago`
+    if (hours < 24) return `${hours}h ago`
+    return `${days}d ago`
+  }
+
+  const formatDuration = (ms: number): string => {
+    const totalSeconds = Math.floor(ms / 1000)
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = totalSeconds % 60
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
   const getTestLink = (test: Test): string => {
     if (test.status === "completed") {
       return `/dashboard/reports/${test.id}`
@@ -79,7 +99,7 @@ export default function TestsPage() {
                 <CardDescription className="flex items-center gap-4 mt-2">
                   <span className="flex items-center gap-1.5">
                     <Clock className="h-4 w-4" />
-                    {test.lastRun}
+                    {test.completedAt ? formatTimeAgo(test.completedAt) : test.lastRun}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Users className="h-4 w-4" />
@@ -114,7 +134,9 @@ export default function TestsPage() {
                 <div className="text-xs text-muted-foreground">Task success</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-foreground">{test.avgTime || "—"}</div>
+                <div className="text-2xl font-bold text-foreground">
+                  {test.duration ? formatDuration(test.duration) : (test.avgTime || "—")}
+                </div>
                 <div className="text-xs text-muted-foreground">Avg time</div>
               </div>
               <div className="ml-auto flex flex-wrap gap-2">

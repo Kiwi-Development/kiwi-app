@@ -28,7 +28,8 @@ export async function POST(req: Request) {
       - Don't ever ask the user for questions or clarification. Just choose a path and continue.
       - There may be a red dot on the screen, which shows a previous place you tried to click. You can use that to guide your next click if it was missed.
       - If the message history shows you've tried the same action more than 3 times, you should try a different action.
-      - Say the word "Done" when you have completed all the tasks. Then, in the following sentences, discuss all your feedback from the task from the perspective of your persona. 
+      - When you have completed all tasks, you MUST use the 'submit_findings' tool to report your findings. Do not just say "Done".
+      - Provide detailed, constructive feedback in the findings.
 
       NOTE: Never click on "Continue with Google" or any other element outside the prototype screen.
       You should only be clicking within the device boundaries.
@@ -98,6 +99,38 @@ export async function POST(req: Request) {
               required: [],
             },
           },
+        },
+        {
+          type: "function",
+          function: {
+            name: "submit_findings",
+            description: "Submit the final usability findings when all tasks are complete.",
+            parameters: {
+              type: "object",
+              properties: {
+                findings: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      title: { type: "string", description: "Short title of the finding" },
+                      severity: { type: "string", enum: ["High", "Med", "Low"], description: "Severity of the issue" },
+                      confidence: { type: "number", description: "Confidence score 0-100" },
+                      description: { type: "string", description: "Detailed description of the issue" },
+                      suggestedFix: { type: "string", description: "Suggested fix for the issue" },
+                      affectingTasks: { type: "array", items: { type: "string" }, description: "List of tasks affected" },
+                    },
+                    required: ["title", "severity", "confidence", "description", "suggestedFix", "affectingTasks"]
+                  }
+                },
+                generalFeedback: {
+                  type: "string",
+                  description: "Overall feedback and summary of the session"
+                }
+              },
+              required: ["findings", "generalFeedback"]
+            }
+          }
         }
       ],
       tool_choice: "auto",

@@ -85,7 +85,7 @@ import { personaStore } from "../../../../lib/persona-store"
 export default function ReportPage() {
   const params = useParams()
   const testId = params.id as string
-  const [findingStates, setFindingStates] = useState<Finding[]>(findings)
+  const [findingStates, setFindingStates] = useState<Finding[]>([])
   const [videoDialogOpen, setVideoDialogOpen] = useState(false)
   const [selectedTimestamp, setSelectedTimestamp] = useState("")
   const { toast } = useToast()
@@ -100,6 +100,29 @@ export default function ReportPage() {
     if (test?.testData?.selectedPersona) {
       const p = personaStore.getPersonas().find(p => p.id === test.testData!.selectedPersona)
       setPersona(p)
+    }
+
+    if (test?.findings && test.findings.length > 0) {
+      // Map stored findings to component state
+      const mappedFindings = test.findings.map((f: any, index: number) => ({
+        id: index + 1,
+        title: f.title,
+        severity: f.severity,
+        confidence: f.confidence,
+        ood: false, // Default
+        timestamp: "00:00", // Default
+        description: f.description,
+        suggestedFix: f.suggestedFix,
+        affectingTasks: f.affectingTasks || [],
+        affectingPersonas: test.testData?.selectedPersona ? [personaStore.getPersonas().find(p => p.id === test.testData!.selectedPersona)?.name || "User"] : [],
+        validated: null,
+        note: "",
+      }))
+      setFindingStates(mappedFindings)
+    } else {
+      // Fallback to hardcoded findings if none exist (or for demo purposes if desired, but let's default to empty or the mock ones if specifically requested. 
+      // For now, let's keep the mock ones ONLY if no real findings exist, to preserve the demo feel if the user hasn't run a test yet.)
+      setFindingStates(findings)
     }
   }, [testId])
 
@@ -298,34 +321,22 @@ export default function ReportPage() {
   }
 
   const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href)
     toast({
       title: "Link copied",
-      description: "Demo-safe URL copied to clipboard",
+      description: "Report link copied to clipboard",
     })
   }
 
   const handleExport = () => {
-    const element = document.createElement("a")
-    const content = `Kiwi Usability Test Report\n\nTest: ${testData?.title}\nStatus: ${testData?.status}\n\nMetrics:\nTask Success: 100%\nDuration: ${testData?.duration ? formatDuration(testData.duration) : "0:00"}\nActions: ${testData?.actionCount || 0}\n\nFindings: ${findings.length} issues identified`
-    const file = new Blob([content], { type: "text/plain" })
-    element.href = URL.createObjectURL(file)
-    element.download = `kiwi-report-${testId}.txt`
-    document.body.appendChild(element)
-    element.click()
-    document.body.removeChild(element)
-
-    toast({
-      title: "Export started",
-      description: "PDF report will download shortly",
-    })
+    window.print()
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background print:bg-white print:h-auto print:overflow-visible">
       <AppLayout>
-
-        <main className="container mx-auto p-6 space-y-8">
-          <div className="flex items-start justify-between">
+        <main className="container mx-auto p-6 print:p-0 print:max-w-none print:h-auto print:overflow-visible">
+          <div className="flex items-start justify-between print:hidden">
             <div className="space-y-2">
               <h1 className="text-3xl font-bold tracking-tight">{testData?.title || "Evaluations Page Design A"}</h1>
               <div className="flex items-center gap-3">
@@ -346,7 +357,7 @@ export default function ReportPage() {
                 </span>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 print:hidden">
               <Button variant="outline" onClick={handleShare}>
                 <Share2 className="h-4 w-4 mr-2" />
                 Share
@@ -438,29 +449,12 @@ export default function ReportPage() {
                         <div className="space-y-2 flex-1">
                           <p className="text-sm font-semibold">Suggested Fix</p>
                           <p className="text-sm text-muted-foreground">{finding.suggestedFix}</p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleCounterfactual}
-                            className="mt-2 bg-transparent"
-                          >
-                            <RotateCcw className="h-4 w-4 mr-2" />
-                            One-click Counterfactual
-                          </Button>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2 bg-transparent"
-                        onClick={() => handleJumpToProof(finding.timestamp)}
-                      >
-                        <Play className="h-4 w-4" />
-                        Jump to {finding.timestamp}
-                      </Button>
+
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span>Affecting:</span>
                         {finding.affectingTasks.map((task) => (
@@ -485,7 +479,7 @@ export default function ReportPage() {
                           </Badge>
                         )}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 print:hidden">
                         <Button
                           variant="outline"
                           size="sm"
@@ -521,24 +515,24 @@ export default function ReportPage() {
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
                     <Badge variant="outline" className="mt-0.5">
-                      UX
+                      User Experience
                     </Badge>
                     <p className="text-sm flex-1">Add loading state and visual confirmation for grid view changes</p>
                   </div>
                   <div className="flex items-start gap-3">
                     <Badge variant="outline" className="mt-0.5">
-                      IA
+                      Information Architecture
                     </Badge>
                     <p className="text-sm flex-1">Make export button more prominent in the comparison toolbar</p>
                   </div>
                   <div className="flex items-start gap-3">
                     <Badge variant="outline" className="mt-0.5">
-                      A11y
+                      Accessibility
                     </Badge>
                     <p className="text-sm flex-1">Fix tab order and ensure all model cards are keyboard accessible</p>
                   </div>
                 </div>
-                <div className="flex gap-2 pt-4">
+                <div className="flex gap-2 pt-4 print:hidden">
                   <Button>Send to Slack</Button>
                   <Button variant="outline">Schedule Human Validation</Button>
                 </div>
