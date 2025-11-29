@@ -573,7 +573,10 @@ export default function NewTestPage() {
                     <Input
                       id="figmaUrl"
                       value={figmaUrl}
-                      onChange={(e) => setFigmaUrl(e.target.value)}
+                      onChange={(e) => {
+                        const url = e.target.value.replace("&show-proto-sidebar=1", "")
+                        setFigmaUrl(url)
+                      }}
                       placeholder="https://www.figma.com/proto/..."
                       className={errors.figmaUrl ? "border-red-500" : ""}
                     />
