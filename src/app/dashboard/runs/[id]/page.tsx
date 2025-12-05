@@ -341,7 +341,7 @@ export default function LiveRunPage() {
         test.completedAt = endTime
         test.duration = endTime - startedAtRef.current
         test.actionCount = stateRef.current.events.filter(e => e.type === "click").length
-        test.successRate = 100 // Test completed successfully
+        // successRate is set by submit_findings tool
 
         testStore.saveTest(test)
       }
@@ -364,18 +364,19 @@ export default function LiveRunPage() {
         return
       }
 
-      currentProgress = Math.min(currentProgress + progressIncrement, 100)
-
-      setState(prev => ({
-        ...prev,
-        personas: prev.personas.map((p, idx) =>
-          idx === 0 ? { ...p, percent: currentProgress } : p
-        )
-      }))
-
-      if (currentProgress >= 100) {
-        handleCompletion()
+      // Cap at 99% to wait for agent to submit findings
+      if (currentProgress < 99) {
+        currentProgress = Math.min(currentProgress + progressIncrement, 99)
+        
+        setState(prev => ({
+          ...prev,
+          personas: prev.personas.map((p, idx) =>
+            idx === 0 ? { ...p, percent: currentProgress } : p
+          )
+        }))
       }
+      // We removed the auto-completion at 100% here. 
+      // Completion is now solely triggered by the agent calling 'submit_findings' or saying "Done".
     }, 3000)
 
     // Main simulation loop
@@ -426,6 +427,7 @@ export default function LiveRunPage() {
             tasks,
             history: agentHistoryRef.current,
             persona: stateRef.current.personas[0],
+            currentProgress,
           }),
         })
 
@@ -437,6 +439,9 @@ export default function LiveRunPage() {
         console.log("Agent decided:", decision)
 
         if (decision.action === "tool_call") {
+          const toolOutputs: any[] = []
+          let shouldStop = false
+
           for (const toolCall of decision.tool_calls) {
             if (toolCall.function.name === "click") {
               const args = JSON.parse(toolCall.function.arguments)
@@ -445,7 +450,13 @@ export default function LiveRunPage() {
               // Check for completion rationale
               if (args.rationale === "Done." || args.rationale === "Done") {
                 console.log("Agent finished task via rationale.")
-                handleCompletion(args.rationale) // Pass rationale as feedback, though it might just be "Done."
+                handleCompletion(args.rationale)
+                shouldStop = true
+                toolOutputs.push({
+                  role: "tool",
+                  tool_call_id: toolCall.id,
+                  content: "Task completed",
+                })
                 break
               }
 
@@ -465,36 +476,64 @@ export default function LiveRunPage() {
 
               // Use Server Action for click
               await proxyClick(sessionId, args.x, args.y)
+              
+              toolOutputs.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: "Clicked successfully",
+              })
+
             } else if (toolCall.function.name === "submit_findings") {
               const args = JSON.parse(toolCall.function.arguments)
               console.log("Agent submitted findings:", args)
               
               const findings = args.findings || []
               const feedback = args.generalFeedback || "Test completed."
+              const taskCompletionPercentage = args.taskCompletionPercentage ?? 0
+              const nextSteps = args.nextSteps
 
-              // Update test with findings
+              // Update test with findings, completion percentage, and next steps
               const test = testStore.getTestById(testId)
               if (test) {
                 test.findings = findings
+                test.successRate = taskCompletionPercentage
+                test.nextSteps = nextSteps
                 testStore.saveTest(test)
               }
 
               handleCompletion(feedback)
+              shouldStop = true
+              
+              toolOutputs.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: "Findings submitted",
+              })
               break
+            } else if (toolCall.function.name === "get_screenshot") {
+               // No-op, we send screenshot anyway
+               toolOutputs.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: "Screenshot taken",
+              })
+            } else {
+               // Fallback for unknown tools
+               toolOutputs.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: "Tool executed",
+              })
             }
           }
 
           // If completion was triggered in the loop, break out
-          if (!simulationRef.current) break
+          if (shouldStop || !simulationRef.current) break
 
           const newHistory = [
             ...agentHistoryRef.current,
             decision.message,
-            {
-              role: "tool",
-              tool_call_id: decision.tool_calls[0].id,
-              content: "Clicked successfully",
-            }
+            ...toolOutputs
           ]
           agentHistoryRef.current = newHistory
           setAgentHistory(newHistory)
@@ -503,7 +542,7 @@ export default function LiveRunPage() {
           console.log("Agent message:", decision.content)
 
           // Also check content for "Done." just in case
-          if (decision.content.includes("Done.") || decision.content.includes("Done")) {
+          if (decision.content?.includes("Done.") || decision.content?.includes("Done")) {
             console.log("Agent finished task via content.")
             // Extract feedback after "Done."
             const feedback = decision.content.replace(/Done\.?/i, "").trim()
@@ -511,10 +550,12 @@ export default function LiveRunPage() {
             break
           }
 
-          setState(prev => ({
-            ...prev,
-            logs: [...prev.logs, { t: Date.now(), text: `Agent: ${decision.content}` }]
-          }))
+          if (decision.content) {
+            setState(prev => ({
+              ...prev,
+              logs: [...prev.logs, { t: Date.now(), text: `Agent: ${decision.content}` }]
+            }))
+          }
 
           const newHistory = [...agentHistoryRef.current, decision.message]
           agentHistoryRef.current = newHistory

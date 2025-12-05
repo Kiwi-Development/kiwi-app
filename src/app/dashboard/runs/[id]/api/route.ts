@@ -7,13 +7,14 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { screenshot, tasks, history, persona } = await req.json()
+    const { screenshot, tasks, history, persona, currentProgress } = await req.json()
 
     if (!screenshot) {
       return NextResponse.json({ error: "Screenshot is required" }, { status: 400 })
     }
 
-    const systemPrompt = `You are a helpful assistant that will simulate UI/UX usability testing. You will be given two functions that link to a Flask API endpoint for clicking and receiving a screenshot of the screen. Using those two tools, you will attempt to complete the tasks given to you by navigating the Figma UI via those two endpoints. Your goal is to complete the following tasks on the provided UI:
+    // Build base system prompt
+    let systemPrompt = `You are a helpful assistant that will simulate UI/UX usability testing. You will be given two functions that link to a Flask API endpoint for clicking and receiving a screenshot of the screen. Using those two tools, you will attempt to complete the tasks given to you by navigating the Figma UI via those two endpoints. Your goal is to complete the following tasks on the provided UI:
       ${tasks.map((t: string, i: number) => `${i + 1}. ${t}`).join("\n")}
 
       You are simulating the following persona:
@@ -37,6 +38,16 @@ export async function POST(req: Request) {
       You have access to a 'click' tool. Use it to interact with the interface.
       The screenshot is the current state of the browser.`
 
+    // At 98% progress, instruct agent to submit findings
+    if (currentProgress !== undefined && currentProgress >= 94) {
+      systemPrompt += `\n\nIMPORTANT: The test is nearing completion (${currentProgress}% progress). You should now evaluate your performance and use the 'submit_findings' tool to report your results. In the taskCompletionPercentage field, honestly assess what percentage of the tasks you successfully completed (0-100). For example, if you completed 2 out of 3 tasks, report 67. If you completed all tasks, report 100. Base this on actual task completion, not just progress through the UI.`
+    }
+
+    const isOvertime = currentProgress !== undefined && currentProgress >= 94
+    const userMessageContent = isOvertime 
+      ? "TIME IS UP. The test session has ended. Do not click anything else. You MUST call 'submit_findings' immediately to report your results."
+      : "Here is the current screen"
+
     const messages: any[] = [
       {
         role: "system",
@@ -46,7 +57,7 @@ export async function POST(req: Request) {
       {
         role: "user",
         content: [
-          { type: "text", text: "Here is the current screen" },
+          { type: "text", text: userMessageContent },
           {
             type: "image_url",
             image_url: {
@@ -108,6 +119,10 @@ export async function POST(req: Request) {
             parameters: {
               type: "object",
               properties: {
+                taskCompletionPercentage: {
+                  type: "number",
+                  description: "Percentage of tasks successfully completed (0-100). Honestly assess based on actual task completion."
+                },
                 findings: {
                   type: "array",
                   items: {
@@ -123,12 +138,34 @@ export async function POST(req: Request) {
                     required: ["title", "severity", "confidence", "description", "suggestedFix", "affectingTasks"]
                   }
                 },
+                nextSteps: {
+                  type: "object",
+                  description: "Categorized next steps and recommendations",
+                  properties: {
+                    userExperience: {
+                      type: "array",
+                      items: { type: "string" },
+                      description: "User experience improvements (e.g., loading states, visual feedback, animations)"
+                    },
+                    informationArchitecture: {
+                      type: "array",
+                      items: { type: "string" },
+                      description: "Information architecture improvements (e.g., navigation, content organization, labeling)"
+                    },
+                    accessibility: {
+                      type: "array",
+                      items: { type: "string" },
+                      description: "Accessibility improvements (e.g., keyboard navigation, screen reader support, color contrast)"
+                    }
+                  },
+                  required: ["userExperience", "informationArchitecture", "accessibility"]
+                },
                 generalFeedback: {
                   type: "string",
                   description: "Overall feedback and summary of the session"
                 }
               },
-              required: ["findings", "generalFeedback"]
+              required: ["taskCompletionPercentage", "findings", "nextSteps", "generalFeedback"]
             }
           }
         }

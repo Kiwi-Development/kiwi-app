@@ -33,6 +33,11 @@ type Test = {
     suggestedFix: string
     affectingTasks: string[]
   }[]
+  nextSteps?: {
+    userExperience: string[]
+    informationArchitecture: string[]
+    accessibility: string[]
+  }
   duration?: number // in milliseconds
   actionCount?: number
   completedAt?: number

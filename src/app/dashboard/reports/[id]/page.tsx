@@ -102,8 +102,8 @@ export default function ReportPage() {
       setPersona(p)
     }
 
-    if (test?.findings && test.findings.length > 0) {
-      // Map stored findings to component state
+    if (test?.findings !== undefined) {
+      // Test has findings from agent (even if empty array)
       const mappedFindings = test.findings.map((f: any, index: number) => ({
         id: index + 1,
         title: f.title,
@@ -120,8 +120,7 @@ export default function ReportPage() {
       }))
       setFindingStates(mappedFindings)
     } else {
-      // Fallback to hardcoded findings if none exist (or for demo purposes if desired, but let's default to empty or the mock ones if specifically requested. 
-      // For now, let's keep the mock ones ONLY if no real findings exist, to preserve the demo feel if the user hasn't run a test yet.)
+      // Test not run yet - show demo findings
       setFindingStates(findings)
     }
   }, [testId])
@@ -376,7 +375,7 @@ export default function ReportPage() {
                   <CardDescription>Task Success</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">100%</div>
+                  <div className="text-3xl font-bold">{testData?.successRate ?? 0}%</div>
                 </CardContent>
               </Card>
               <Card className="w-full">
@@ -532,44 +531,8 @@ export default function ReportPage() {
                     <p className="text-sm flex-1">Fix tab order and ensure all model cards are keyboard accessible</p>
                   </div>
                 </div>
-                <div className="flex gap-2 pt-4 print:hidden">
-                  <Button>Send to Slack</Button>
-                  <Button variant="outline">Schedule Human Validation</Button>
-                </div>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Calibration & Trust</CardTitle>
-                <CardDescription>Model performance metrics over the last 30 days</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Precision@5</span>
-                      <span className="text-sm font-semibold">84%</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">False Positive Rate</span>
-                      <span className="text-sm font-semibold">12%</span>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Validation Turnaround</span>
-                      <span className="text-sm font-semibold">2.3 days</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Inter-rater Agreement</span>
-                      <span className="text-sm font-semibold">89%</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
           </div>
         </main>
 
