@@ -22,9 +22,9 @@ export async function proxy(req: NextRequest) {
     // console.log("Error:", error)
 
     // If user is not signed in and the current path is /dashboard, redirect the user to /
-    // if ((error || !user) && req.nextUrl.pathname.startsWith('/dashboard')) {
-    //     return NextResponse.redirect(new URL('/', req.url))
-    // }
+    if ((error || !user) && req.nextUrl.pathname.startsWith('/dashboard')) {
+        return NextResponse.redirect(new URL('/', req.url))
+    }
 
     return res
 }
