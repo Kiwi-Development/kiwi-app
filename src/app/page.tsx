@@ -155,7 +155,7 @@ export default function Home() {
                   <AvatarFallback>NX</AvatarFallback>
                 </Avatar>
               </div>
-              <p>20+ designers have already joined</p>
+              <p>100+ designers have already joined</p>
             </div>
 
             {/* Floating Cursors */}
