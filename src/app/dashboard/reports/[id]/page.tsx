@@ -1,21 +1,37 @@
-"use client"
+"use client";
 
-import { AppLayout } from "../../../../components/app-layout"
-import { Button } from "../../../../components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../../components/ui/card"
-import { Badge } from "../../../../components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs"
-import { Textarea } from "../../../../components/ui/textarea"
-import { useToast } from "../../../../../hooks/use-toast"
-import { Share2, FileDown, Play, CheckCircle2, XCircle, TrendingUp, RotateCcw, Target, X } from "lucide-react"
-import { useState, useEffect, useRef, useCallback } from "react"
-import { useParams } from "next/navigation"
-import { testStore } from "../../../../lib/test-store"
-import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/dialog"
-import { Slider } from "../../../../components/ui/slider"
-import { ReplayPlayer } from "../../runs/[id]/components/replay-player"
+import { AppLayout } from "../../../../components/app-layout";
+import { Button } from "../../../../components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../../../components/ui/card";
+import { Badge } from "../../../../components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
+import { Textarea } from "../../../../components/ui/textarea";
+import { useToast } from "../../../../../hooks/use-toast";
+import {
+  Share2,
+  FileDown,
+  Play,
+  CheckCircle2,
+  XCircle,
+  TrendingUp,
+  RotateCcw,
+  Target,
+  X,
+} from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useParams } from "next/navigation";
+import { testStore } from "../../../../lib/test-store";
+import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/dialog";
+import { Slider } from "../../../../components/ui/slider";
+import { ReplayPlayer } from "../../runs/[id]/components/replay-player";
 
-type ValidationStatus = 'validated' | 'refuted' | null;
+type ValidationStatus = "validated" | "refuted" | null;
 
 interface Finding {
   id: number;
@@ -55,7 +71,8 @@ const findings: Finding[] = [
     confidence: 54,
     ood: true,
     timestamp: "02:14",
-    description: "Users struggle to find the export functionality after selecting models for comparison.",
+    description:
+      "Users struggle to find the export functionality after selecting models for comparison.",
     suggestedFix: "Make export button more prominent in the comparison toolbar",
     affectingTasks: ["Task 3"],
     affectingPersonas: ["Time-pressed"],
@@ -76,73 +93,96 @@ const findings: Finding[] = [
     validated: null,
     note: "",
   },
-]
+];
 
-import { personaStore } from "../../../../lib/persona-store"
+import { personaStore } from "../../../../lib/persona-store";
 
 // ... existing imports ...
 
 export default function ReportPage() {
-  const params = useParams()
-  const testId = params.id as string
-  const [findingStates, setFindingStates] = useState<Finding[]>([])
-  const [videoDialogOpen, setVideoDialogOpen] = useState(false)
-  const [selectedTimestamp, setSelectedTimestamp] = useState("")
-  const { toast } = useToast()
+  const params = useParams();
+  const testId = params.id as string;
+  const [findingStates, setFindingStates] = useState<Finding[]>([]);
+  const [videoDialogOpen, setVideoDialogOpen] = useState(false);
+  const [selectedTimestamp, setSelectedTimestamp] = useState("");
+  const { toast } = useToast();
 
-  const [testData, setTestData] = useState<any>(null)
-  const [persona, setPersona] = useState<any>(null)
+  const [testData, setTestData] = useState<ReturnType<typeof testStore.getTestById> | null>(null);
+  const [persona, setPersona] = useState<ReturnType<typeof personaStore.getPersonas>[0] | null>(
+    null
+  );
 
   useEffect(() => {
-    const test = testStore.getTestById(testId)
-    setTestData(test)
+    const test = testStore.getTestById(testId);
+    // Initialize state from store - this is acceptable for one-time initialization
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTestData(test);
 
     if (test?.testData?.selectedPersona) {
-      const p = personaStore.getPersonas().find(p => p.id === test.testData!.selectedPersona)
-      setPersona(p)
+      const p = personaStore.getPersonas().find((p) => p.id === test.testData!.selectedPersona);
+      if (p) {
+        setPersona(p);
+      }
     }
 
     if (test?.findings !== undefined) {
       // Test has findings from agent (even if empty array)
-      const mappedFindings = test.findings.map((f: any, index: number) => ({
-        id: index + 1,
-        title: f.title,
-        severity: f.severity,
-        confidence: f.confidence,
-        ood: false, // Default
-        timestamp: "00:00", // Default
-        description: f.description,
-        suggestedFix: f.suggestedFix,
-        affectingTasks: f.affectingTasks || [],
-        affectingPersonas: test.testData?.selectedPersona ? [personaStore.getPersonas().find(p => p.id === test.testData!.selectedPersona)?.name || "User"] : [],
-        validated: null,
-        note: "",
-      }))
-      setFindingStates(mappedFindings)
+      const mappedFindings = test.findings.map(
+        (
+          f: {
+            title: string;
+            severity: string;
+            confidence?: number;
+            description?: string;
+            suggestedFix?: string;
+            affectingTasks?: string[];
+          },
+          index: number
+        ) => ({
+          id: index + 1,
+          title: f.title,
+          severity: f.severity,
+          confidence: f.confidence ?? 0,
+          ood: false, // Default
+          timestamp: "00:00", // Default
+          description: f.description ?? "",
+          suggestedFix: f.suggestedFix ?? "",
+          affectingTasks: f.affectingTasks ?? [],
+          affectingPersonas: test.testData?.selectedPersona
+            ? [
+                personaStore.getPersonas().find((p) => p.id === test.testData!.selectedPersona)
+                  ?.name || "User",
+              ]
+            : [],
+          validated: null,
+          note: "",
+        })
+      );
+      setFindingStates(mappedFindings);
     } else {
       // Test not run yet - show demo findings
-      setFindingStates(findings)
+      setFindingStates(findings);
     }
-  }, [testId])
+  }, [testId]);
 
   const handleValidation = (id: number, status: "validated" | "refuted") => {
-    setFindingStates((prev) => prev.map((f) => (f.id === id ? { ...f, validated: status } : f)))
+    setFindingStates((prev) => prev.map((f) => (f.id === id ? { ...f, validated: status } : f)));
     toast({
       title: status === "validated" ? "Finding validated" : "Finding refuted",
       description: "Your feedback has been recorded",
-    })
-  }
+    });
+  };
 
   const handleCounterfactual = () => {
     toast({
       title: "Counterfactual queued",
       description: "Re-running test with suggested copy changes",
-    })
-  }
+    });
+  };
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [videoCurrentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -161,8 +201,8 @@ export default function ReportPage() {
 
   // Convert timestamp to seconds
   const getTimeInSeconds = useCallback((timestamp: string) => {
-    const [minutes, seconds] = timestamp.split(':').map(Number);
-    return (minutes * 60) + seconds;
+    const [minutes, seconds] = timestamp.split(":").map(Number);
+    return minutes * 60 + seconds;
   }, []);
 
   const handleCanPlay = useCallback(() => {
@@ -170,7 +210,7 @@ export default function ReportPage() {
       const timeInSeconds = getTimeInSeconds(selectedTimestamp);
       videoRef.current.currentTime = timeInSeconds;
       videoRef.current.muted = true; // Mute for autoplay
-      videoRef.current.play().catch(e => {
+      videoRef.current.play().catch((e) => {
         console.log("Autoplay blocked, user interaction required");
       });
     }
@@ -181,13 +221,13 @@ export default function ReportPage() {
     const video = videoRef.current;
     if (!video) return;
 
-    video.addEventListener('canplay', handleCanPlay);
-    video.addEventListener('play', () => setIsPlaying(true));
-    video.addEventListener('pause', () => setIsPlaying(false));
-    video.addEventListener('timeupdate', () => setCurrentTime(video.currentTime));
-    video.addEventListener('durationchange', () => setDuration(video.duration));
-    video.addEventListener('seeking', () => setIsPlaying(false));
-    video.addEventListener('seeked', () => {
+    video.addEventListener("canplay", handleCanPlay);
+    video.addEventListener("play", () => setIsPlaying(true));
+    video.addEventListener("pause", () => setIsPlaying(false));
+    video.addEventListener("timeupdate", () => setCurrentTime(video.currentTime));
+    video.addEventListener("durationchange", () => setDuration(video.duration));
+    video.addEventListener("seeking", () => setIsPlaying(false));
+    video.addEventListener("seeked", () => {
       if (!video.paused) {
         video.play().catch(console.error);
       }
@@ -204,13 +244,13 @@ export default function ReportPage() {
     }
 
     return () => {
-      video.removeEventListener('canplay', handleCanPlay);
-      video.removeEventListener('play', () => { });
-      video.removeEventListener('pause', () => { });
-      video.removeEventListener('timeupdate', () => { });
-      video.removeEventListener('durationchange', () => { });
-      video.removeEventListener('seeking', () => { });
-      video.removeEventListener('seeked', () => { });
+      video.removeEventListener("canplay", handleCanPlay);
+      video.removeEventListener("play", () => {});
+      video.removeEventListener("pause", () => {});
+      video.removeEventListener("timeupdate", () => {});
+      video.removeEventListener("durationchange", () => {});
+      video.removeEventListener("seeking", () => {});
+      video.removeEventListener("seeked", () => {});
     };
   }, [handleCanPlay, selectedTimestamp, getTimeInSeconds]);
 
@@ -220,8 +260,8 @@ export default function ReportPage() {
       setIsFullscreen(!!document.fullscreenElement);
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
   // Player controls
@@ -230,7 +270,7 @@ export default function ReportPage() {
     if (!video) return;
 
     if (video.paused) {
-      video.play().catch(e => {
+      video.play().catch((e) => {
         // If autoplay was prevented, mute and try again
         video.muted = true;
         video.play().catch(console.error);
@@ -242,7 +282,7 @@ export default function ReportPage() {
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      videoRef.current?.requestFullscreen().catch(err => {
+      videoRef.current?.requestFullscreen().catch((err) => {
         console.error(`Error attempting to enable fullscreen: ${err.message}`);
       });
     } else {
@@ -257,17 +297,16 @@ export default function ReportPage() {
     }
   };
 
-
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
   const handleJumpToProof = (timestamp: string) => {
     setSelectedTimestamp(timestamp);
     setVideoDialogOpen(true);
-  }
+  };
 
   useEffect(() => {
     const video = videoRef.current;
@@ -279,7 +318,7 @@ export default function ReportPage() {
         video.currentTime = timeInSeconds;
         video.muted = true;
         setCurrentTime(timeInSeconds);
-        video.play().catch(e => {
+        video.play().catch((e) => {
           console.log("Autoplay blocked, user interaction required");
         });
       }
@@ -293,43 +332,44 @@ export default function ReportPage() {
     // Also set up the canplay event as a fallback
     const handleCanPlay = () => {
       seekToTime();
-      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener("canplay", handleCanPlay);
     };
 
-    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener("canplay", handleCanPlay);
     return () => {
-      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener("canplay", handleCanPlay);
     };
   }, [selectedTimestamp, getTimeInSeconds]);
 
+  const [renderTime] = useState(() => Date.now());
   const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000)
-    if (seconds < 60) return "just now"
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes}m ago`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    return `${Math.floor(hours / 24)}d ago`
-  }
+    const seconds = Math.floor((renderTime - timestamp) / 1000);
+    if (seconds < 60) return "just now";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  };
 
   const formatDuration = (ms: number) => {
-    const seconds = Math.floor(ms / 1000)
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    return `${minutes}m ${remainingSeconds}s`
-  }
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds}s`;
+  };
 
   const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href)
+    navigator.clipboard.writeText(window.location.href);
     toast({
       title: "Link copied",
       description: "Report link copied to clipboard",
-    })
-  }
+    });
+  };
 
   const handleExport = () => {
-    window.print()
-  }
+    window.print();
+  };
 
   return (
     <div className="min-h-screen bg-background print:bg-white print:h-auto print:overflow-visible">
@@ -337,14 +377,18 @@ export default function ReportPage() {
         <main className="container mx-auto p-6 print:p-0 print:max-w-none print:h-auto print:overflow-visible">
           <div className="flex items-start justify-between print:hidden">
             <div className="space-y-2">
-              <h1 className="text-3xl font-bold tracking-tight">{testData?.title || "Evaluations Page Design A"}</h1>
+              <h1 className="text-3xl font-bold tracking-tight">
+                {testData?.title || "Evaluations Page Design A"}
+              </h1>
               <div className="flex items-center gap-3">
                 <div className="flex gap-2">
                   {persona ? (
                     <>
                       <Badge variant="secondary">{persona.name}</Badge>
                       {persona.tags.map((tag: string) => (
-                        <Badge key={tag} variant="outline">{tag}</Badge>
+                        <Badge key={tag} variant="outline">
+                          {tag}
+                        </Badge>
                       ))}
                     </>
                   ) : (
@@ -352,7 +396,10 @@ export default function ReportPage() {
                   )}
                 </div>
                 <span className="text-sm text-muted-foreground">
-                  • {testData?.completedAt ? `Completed ${formatTimeAgo(testData.completedAt)}` : "Running"}
+                  •{" "}
+                  {testData?.completedAt
+                    ? `Completed ${formatTimeAgo(testData.completedAt)}`
+                    : "Running"}
                 </span>
               </div>
             </div>
@@ -408,7 +455,9 @@ export default function ReportPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-base leading-relaxed whitespace-pre-wrap">{testData.feedback}</p>
+                    <p className="text-base leading-relaxed whitespace-pre-wrap">
+                      {testData.feedback}
+                    </p>
                   </CardContent>
                 </Card>
               )}
@@ -434,10 +483,14 @@ export default function ReportPage() {
                           >
                             {finding.severity}
                           </Badge>
-                          <span className="text-sm text-muted-foreground">Confidence: {finding.confidence}%</span>
+                          <span className="text-sm text-muted-foreground">
+                            Confidence: {finding.confidence}%
+                          </span>
                         </div>
                         <CardTitle className="text-xl">{finding.title}</CardTitle>
-                        <CardDescription className="text-base">{finding.description}</CardDescription>
+                        <CardDescription className="text-base">
+                          {finding.description}
+                        </CardDescription>
                       </div>
                     </div>
                   </CardHeader>
@@ -453,7 +506,6 @@ export default function ReportPage() {
                     </div>
 
                     <div className="flex items-center gap-4">
-
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span>Affecting:</span>
                         {finding.affectingTasks.map((task) => (
@@ -473,7 +525,9 @@ export default function ReportPage() {
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-semibold">Manual Override</p>
                         {finding.validated && (
-                          <Badge variant={finding.validated === "validated" ? "default" : "secondary"}>
+                          <Badge
+                            variant={finding.validated === "validated" ? "default" : "secondary"}
+                          >
                             {finding.validated === "validated" ? "Validated" : "Refuted"}
                           </Badge>
                         )}
@@ -498,7 +552,10 @@ export default function ReportPage() {
                           Refute
                         </Button>
                       </div>
-                      <Textarea placeholder="Add notes about this finding..." className="min-h-20" />
+                      <Textarea
+                        placeholder="Add notes about this finding..."
+                        className="min-h-20"
+                      />
                     </div>
                   </CardContent>
                 </Card>
@@ -508,7 +565,9 @@ export default function ReportPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Next Steps</CardTitle>
-                <CardDescription>Prioritized actions to improve the user experience</CardDescription>
+                <CardDescription>
+                  Prioritized actions to improve the user experience
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-3">
@@ -516,19 +575,25 @@ export default function ReportPage() {
                     <Badge variant="outline" className="mt-0.5">
                       User Experience
                     </Badge>
-                    <p className="text-sm flex-1">Add loading state and visual confirmation for grid view changes</p>
+                    <p className="text-sm flex-1">
+                      Add loading state and visual confirmation for grid view changes
+                    </p>
                   </div>
                   <div className="flex items-start gap-3">
                     <Badge variant="outline" className="mt-0.5">
                       Information Architecture
                     </Badge>
-                    <p className="text-sm flex-1">Make export button more prominent in the comparison toolbar</p>
+                    <p className="text-sm flex-1">
+                      Make export button more prominent in the comparison toolbar
+                    </p>
                   </div>
                   <div className="flex items-start gap-3">
                     <Badge variant="outline" className="mt-0.5">
                       Accessibility
                     </Badge>
-                    <p className="text-sm flex-1">Fix tab order and ensure all model cards are keyboard accessible</p>
+                    <p className="text-sm flex-1">
+                      Fix tab order and ensure all model cards are keyboard accessible
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -559,5 +624,5 @@ export default function ReportPage() {
         </Dialog>
       </AppLayout>
     </div>
-  )
+  );
 }

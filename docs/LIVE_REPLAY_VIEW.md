@@ -30,9 +30,9 @@ Edit the `eventTimeline` array in `app/runs/[id]/adapter.ts`:
 
 \`\`\`typescript
 const eventTimeline = [
-  { t: 12, event: { ... } },  // Event at 12 seconds
-  { t: 23, event: { ... } },  // Event at 23 seconds
-  // Add more events here
+{ t: 12, event: { ... } }, // Event at 12 seconds
+{ t: 23, event: { ... } }, // Event at 23 seconds
+// Add more events here
 ];
 \`\`\`
 
@@ -48,19 +48,20 @@ Example:
 
 \`\`\`typescript
 export class SSELiveRunAdapter implements LiveRunAdapter {
-  start(emit: { ... }) {
-    const eventSource = new EventSource('/api/runs/stream');
-    
+start(emit: { ... }) {
+const eventSource = new EventSource('/api/runs/stream');
+
     eventSource.addEventListener('event', (e) => {
       emit.event(JSON.parse(e.data));
     });
-    
+
     // ... handle other event types
-    
+
     return {
       stop: () => eventSource.close()
     };
-  }
+
+}
 }
 \`\`\`
 

@@ -1,35 +1,35 @@
-"use client"
+"use client";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../../components/ui/tabs"
-import { Badge } from "../../../../../components/ui/badge"
-import { CheckCircle2, XCircle } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../../components/ui/tabs";
+import { Badge } from "../../../../../components/ui/badge";
+import { CheckCircle2, XCircle } from "lucide-react";
 
 interface Step {
-  index: number
-  title: string
-  pass?: boolean
-  duration?: number
+  index: number;
+  title: string;
+  pass?: boolean;
+  duration?: number;
 }
 
 interface Tag {
-  id: string
-  t: number
-  tag: string
+  id: string;
+  t: number;
+  tag: string;
 }
 
 interface SideTabsProps {
-  steps: Step[]
-  tags: Tag[]
-  consoleTrace: unknown[]
-  onTagClick?: (time: number) => void
+  steps: Step[];
+  tags: Tag[];
+  consoleTrace: unknown[];
+  onTagClick?: (time: number) => void;
 }
 
 export function SideTabs({ steps, tags, consoleTrace, onTagClick }: SideTabsProps) {
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, "0")}`
-  }
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
 
   return (
     <Tabs defaultValue="steps" className="w-full">
@@ -51,7 +51,10 @@ export function SideTabs({ steps, tags, consoleTrace, onTagClick }: SideTabsProp
             <div className="flex items-center justify-between">
               <h4 className="font-semibold text-sm">{step.title}</h4>
               {step.pass !== undefined && (
-                <Badge variant={step.pass ? "default" : "destructive"} className="flex items-center gap-1">
+                <Badge
+                  variant={step.pass ? "default" : "destructive"}
+                  className="flex items-center gap-1"
+                >
                   {step.pass ? (
                     <>
                       <CheckCircle2 className="h-3 w-3" />
@@ -75,7 +78,9 @@ export function SideTabs({ steps, tags, consoleTrace, onTagClick }: SideTabsProp
 
       <TabsContent value="tags" className="space-y-2 mt-4">
         {tags.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Tagged events will appear here during the run</p>
+          <p className="text-sm text-muted-foreground">
+            Tagged events will appear here during the run
+          </p>
         ) : (
           tags.map((tag) => (
             <button
@@ -93,10 +98,15 @@ export function SideTabs({ steps, tags, consoleTrace, onTagClick }: SideTabsProp
       <TabsContent value="console" className="mt-4">
         <div className="space-y-2 max-h-96 overflow-y-auto">
           {consoleTrace.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Console trace will appear here during the run</p>
+            <p className="text-sm text-muted-foreground">
+              Console trace will appear here during the run
+            </p>
           ) : (
             consoleTrace.map((trace, index) => (
-              <pre key={index} className="text-xs font-mono bg-muted p-3 rounded-lg overflow-x-auto">
+              <pre
+                key={index}
+                className="text-xs font-mono bg-muted p-3 rounded-lg overflow-x-auto"
+              >
                 {JSON.stringify(trace, null, 2)}
               </pre>
             ))
@@ -104,5 +114,5 @@ export function SideTabs({ steps, tags, consoleTrace, onTagClick }: SideTabsProp
         </div>
       </TabsContent>
     </Tabs>
-  )
+  );
 }

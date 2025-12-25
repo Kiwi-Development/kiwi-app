@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import type { PersonaProgress } from "../model"
-import { Progress } from "../../../../../components/ui/progress"
+import type { PersonaProgress } from "../model";
+import { Progress } from "../../../../../components/ui/progress";
 
 interface PersonaProgressListProps {
-  personas: PersonaProgress[]
+  personas: PersonaProgress[];
 }
 
 const statusColors: Record<string, string> = {
@@ -12,14 +12,14 @@ const statusColors: Record<string, string> = {
   running: "bg-blue-500",
   completed: "bg-green-500",
   error: "bg-red-500",
-}
+};
 
 const statusLabels: Record<string, string> = {
   queued: "Queued",
   running: "Running",
   completed: "Completed",
   error: "Error",
-}
+};
 
 export function PersonaProgressList({ personas }: PersonaProgressListProps) {
   return (
@@ -37,15 +37,19 @@ export function PersonaProgressList({ personas }: PersonaProgressListProps) {
                 </p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <div className={`h-2 w-2 rounded-full ${statusColors[persona.status]}`} />
-                  <span className="text-xs text-muted-foreground">{statusLabels[persona.status]}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {statusLabels[persona.status]}
+                  </span>
                 </div>
               </div>
             </div>
-            <span className="text-sm font-medium text-muted-foreground">{Math.round(persona.percent)}%</span>
+            <span className="text-sm font-medium text-muted-foreground">
+              {Math.round(persona.percent)}%
+            </span>
           </div>
           <Progress value={persona.percent} className="h-2" />
         </div>
       ))}
     </div>
-  )
+  );
 }

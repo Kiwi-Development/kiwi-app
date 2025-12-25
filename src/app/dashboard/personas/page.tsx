@@ -1,37 +1,53 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { AppLayout } from "../../../components/app-layout"
-import { Button } from "../../../components/ui/button"
-import { Card, CardContent } from "../../../components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table"
-import { Badge } from "../../../components/ui/badge"
-import { Plus, Trash2 } from "lucide-react"
-import { Input } from "../../../components/ui/input"
-import { Textarea } from "../../../components/ui/textarea"
-import { Label } from "../../../components/ui/label"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../../../components/ui/dialog"
-import { useToast } from "../../../../hooks/use-toast"
-import { personaStore, type Persona } from "../../../lib/persona-store"
+import { useState, useEffect } from "react";
+import { AppLayout } from "../../../components/app-layout";
+import { Button } from "../../../components/ui/button";
+import { Card, CardContent } from "../../../components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../../../components/ui/table";
+import { Badge } from "../../../components/ui/badge";
+import { Plus, Trash2 } from "lucide-react";
+import { Input } from "../../../components/ui/input";
+import { Textarea } from "../../../components/ui/textarea";
+import { Label } from "../../../components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../../../components/ui/dialog";
+import { useToast } from "../../../../hooks/use-toast";
+import { personaStore, type Persona } from "../../../lib/persona-store";
 
 export default function PersonasPage() {
-  const [personas, setPersonas] = useState<Persona[]>([])
-  const [personaDialogOpen, setPersonaDialogOpen] = useState(false)
-  const [editingPersona, setEditingPersona] = useState<Persona | null>(null)
-  const [newPersonaName, setNewPersonaName] = useState("")
-  const [newPersonaRole, setNewPersonaRole] = useState("")
-  const [newPersonaTags, setNewPersonaTags] = useState<string[]>([])
-  const [newPersonaGoals, setNewPersonaGoals] = useState("")
-  const [newPersonaBehaviors, setNewPersonaBehaviors] = useState("")
-  const [newPersonaFrustrations, setNewPersonaFrustrations] = useState("")
-  const [newPersonaConstraints, setNewPersonaConstraints] = useState("")
-  const [newPersonaAccessibility, setNewPersonaAccessibility] = useState("")
-  const { toast } = useToast()
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [personaDialogOpen, setPersonaDialogOpen] = useState(false);
+  const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
+  const [newPersonaName, setNewPersonaName] = useState("");
+  const [newPersonaRole, setNewPersonaRole] = useState("");
+  const [newPersonaTags, setNewPersonaTags] = useState<string[]>([]);
+  const [newPersonaGoals, setNewPersonaGoals] = useState("");
+  const [newPersonaBehaviors, setNewPersonaBehaviors] = useState("");
+  const [newPersonaFrustrations, setNewPersonaFrustrations] = useState("");
+  const [newPersonaConstraints, setNewPersonaConstraints] = useState("");
+  const [newPersonaAccessibility, setNewPersonaAccessibility] = useState("");
+  const { toast } = useToast();
 
   useEffect(() => {
-    const storedPersonas = personaStore.getPersonas()
-    setPersonas(storedPersonas)
-  }, [])
+    const storedPersonas = personaStore.getPersonas();
+    // Initialize state from store - this is acceptable for one-time initialization
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPersonas(storedPersonas);
+  }, []);
 
   const availableTags = [
     "Non-technical",
@@ -42,7 +58,7 @@ export default function PersonasPage() {
     "Expert user",
     "First-time user",
     "Non-native English",
-  ]
+  ];
 
   const handleSavePersona = () => {
     if (!newPersonaName || !newPersonaRole) {
@@ -50,8 +66,8 @@ export default function PersonasPage() {
         title: "Error",
         description: "Please fill in name and role",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     if (editingPersona) {
@@ -59,91 +75,97 @@ export default function PersonasPage() {
         name: newPersonaName,
         role: newPersonaRole,
         tags: newPersonaTags,
-        goals: newPersonaGoals.split('\n').filter(Boolean),
-        behaviors: newPersonaBehaviors.split('\n').filter(Boolean),
-        frustrations: newPersonaFrustrations.split('\n').filter(Boolean),
-        constraints: newPersonaConstraints.split('\n').filter(Boolean),
-        accessibility: newPersonaAccessibility.split('\n').filter(Boolean),
-      })
-      setPersonas(personaStore.getPersonas())
+        goals: newPersonaGoals.split("\n").filter(Boolean),
+        behaviors: newPersonaBehaviors.split("\n").filter(Boolean),
+        frustrations: newPersonaFrustrations.split("\n").filter(Boolean),
+        constraints: newPersonaConstraints.split("\n").filter(Boolean),
+        accessibility: newPersonaAccessibility.split("\n").filter(Boolean),
+      });
+      setPersonas(personaStore.getPersonas());
       toast({
         title: "Persona updated",
         description: `${newPersonaName} has been updated`,
-      })
+      });
     } else {
       const newPersona = personaStore.addPersona({
         name: newPersonaName,
         role: newPersonaRole,
         tags: newPersonaTags,
-        goals: newPersonaGoals.split('\n').filter(Boolean),
-        behaviors: newPersonaBehaviors.split('\n').filter(Boolean),
-        frustrations: newPersonaFrustrations.split('\n').filter(Boolean),
-        constraints: newPersonaConstraints.split('\n').filter(Boolean),
-        accessibility: newPersonaAccessibility.split('\n').filter(Boolean),
-      })
-      setPersonas([...personas, newPersona])
+        goals: newPersonaGoals.split("\n").filter(Boolean),
+        behaviors: newPersonaBehaviors.split("\n").filter(Boolean),
+        frustrations: newPersonaFrustrations.split("\n").filter(Boolean),
+        constraints: newPersonaConstraints.split("\n").filter(Boolean),
+        accessibility: newPersonaAccessibility.split("\n").filter(Boolean),
+      });
+      setPersonas([...personas, newPersona]);
       toast({
         title: "Persona created",
         description: `${newPersonaName} has been added to your personas`,
-      })
+      });
     }
 
     // Reset form
-    setPersonaDialogOpen(false)
-    setNewPersonaName("")
-    setNewPersonaRole("")
-    setNewPersonaTags([])
-    setNewPersonaGoals("")
-    setNewPersonaBehaviors("")
-    setNewPersonaFrustrations("")
-    setNewPersonaConstraints("")
-    setNewPersonaAccessibility("")
-    setEditingPersona(null)
+    setPersonaDialogOpen(false);
+    setNewPersonaName("");
+    setNewPersonaRole("");
+    setNewPersonaTags([]);
+    setNewPersonaGoals("");
+    setNewPersonaBehaviors("");
+    setNewPersonaFrustrations("");
+    setNewPersonaConstraints("");
+    setNewPersonaAccessibility("");
+    setEditingPersona(null);
 
-    setPersonas(personaStore.getPersonas())
-  }
+    setPersonas(personaStore.getPersonas());
+  };
 
   const handleEditPersona = (persona: Persona) => {
-    setEditingPersona(persona)
-    setNewPersonaName(persona.name)
-    setNewPersonaRole(persona.role)
-    setNewPersonaTags([...persona.tags])
-    setNewPersonaGoals(persona.goals?.join('\n') || "")
-    setNewPersonaBehaviors(persona.behaviors?.join('\n') || "")
-    setNewPersonaFrustrations(persona.frustrations?.join('\n') || "")
-    setNewPersonaConstraints(persona.constraints?.join('\n') || "")
-    setNewPersonaAccessibility(persona.accessibility?.join('\n') || "")
-    setPersonaDialogOpen(true)
-  }
+    setEditingPersona(persona);
+    setNewPersonaName(persona.name);
+    setNewPersonaRole(persona.role);
+    setNewPersonaTags([...persona.tags]);
+    setNewPersonaGoals(persona.goals?.join("\n") || "");
+    setNewPersonaBehaviors(persona.behaviors?.join("\n") || "");
+    setNewPersonaFrustrations(persona.frustrations?.join("\n") || "");
+    setNewPersonaConstraints(persona.constraints?.join("\n") || "");
+    setNewPersonaAccessibility(persona.accessibility?.join("\n") || "");
+    setPersonaDialogOpen(true);
+  };
 
   const toggleTag = (tag: string) => {
-    setNewPersonaTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
-  }
+    setNewPersonaTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <AppLayout>
-
         <main className="container mx-auto p-6 space-y-8">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Personas</h1>
-              <p className="text-muted-foreground mt-2">Manage your testing personas and their variants</p>
+              <p className="text-muted-foreground mt-2">
+                Manage your testing personas and their variants
+              </p>
             </div>
-            <Dialog open={personaDialogOpen} onOpenChange={(open) => {
-              setPersonaDialogOpen(open)
-              if (!open) {
-                setNewPersonaName("")
-                setNewPersonaRole("")
-                setNewPersonaTags([])
-                setNewPersonaGoals("")
-                setNewPersonaBehaviors("")
-                setNewPersonaFrustrations("")
-                setNewPersonaConstraints("")
-                setNewPersonaAccessibility("")
-                setEditingPersona(null)
-              }
-            }}>
+            <Dialog
+              open={personaDialogOpen}
+              onOpenChange={(open) => {
+                setPersonaDialogOpen(open);
+                if (!open) {
+                  setNewPersonaName("");
+                  setNewPersonaRole("");
+                  setNewPersonaTags([]);
+                  setNewPersonaGoals("");
+                  setNewPersonaBehaviors("");
+                  setNewPersonaFrustrations("");
+                  setNewPersonaConstraints("");
+                  setNewPersonaAccessibility("");
+                  setEditingPersona(null);
+                }
+              }}
+            >
               <DialogTrigger asChild>
                 <Button size="lg">
                   <Plus className="h-4 w-4 mr-2" />
@@ -152,9 +174,12 @@ export default function PersonasPage() {
               </DialogTrigger>
               <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>{editingPersona ? 'Edit Persona' : 'Create New Persona'}</DialogTitle>
+                  <DialogTitle>
+                    {editingPersona ? "Edit Persona" : "Create New Persona"}
+                  </DialogTitle>
                   <DialogDescription>
-                    Add a new user persona for testing. Personas help simulate different user behaviors.
+                    Add a new user persona for testing. Personas help simulate different user
+                    behaviors.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -249,7 +274,9 @@ export default function PersonasPage() {
                   <Button variant="outline" onClick={() => setPersonaDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleSavePersona}>{editingPersona ? 'Update Persona' : 'Create Persona'}</Button>
+                  <Button onClick={handleSavePersona}>
+                    {editingPersona ? "Update Persona" : "Create Persona"}
+                  </Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -289,8 +316,8 @@ export default function PersonasPage() {
                             size="sm"
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={(e) => {
-                              e.stopPropagation()
-                              handleEditPersona(persona)
+                              e.stopPropagation();
+                              handleEditPersona(persona);
                             }}
                           >
                             Edit
@@ -300,13 +327,13 @@ export default function PersonasPage() {
                             size="icon"
                             className="opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={(e) => {
-                              e.stopPropagation()
-                              personaStore.deletePersona(persona.id)
-                              setPersonas(personaStore.getPersonas())
+                              e.stopPropagation();
+                              personaStore.deletePersona(persona.id);
+                              setPersonas(personaStore.getPersonas());
                               toast({
                                 title: "Persona deleted",
                                 description: `${persona.name} has been removed`,
-                              })
+                              });
                             }}
                             aria-label="Delete persona"
                           >
@@ -323,5 +350,5 @@ export default function PersonasPage() {
         </main>
       </AppLayout>
     </div>
-  )
+  );
 }

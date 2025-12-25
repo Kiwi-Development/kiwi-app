@@ -1,9 +1,9 @@
-import type React from "react"
-import type { Metadata } from "next"
-import localFont from "next/font/local"
-import "../../styles/globals.css"
-import { Toaster } from "sonner"
-import { Providers } from './provider'
+import type React from "react";
+import type { Metadata } from "next";
+import localFont from "next/font/local";
+import "../../styles/globals.css";
+import { Toaster } from "sonner";
+import { Providers } from "./provider";
 
 const satoshi = localFont({
   src: [
@@ -13,22 +13,22 @@ const satoshi = localFont({
     },
   ],
   variable: "--font-satoshi",
-})
+});
 
 export const metadata: Metadata = {
   title: "Kiwi - AI-Native Usability Testing",
   description: "Automated usability testing with AI-powered insights",
   generator: "v0.app",
   icons: {
-    icon: '/favicon.ico',
+    icon: "/favicon.ico",
     apple: "../../public/apple-icon.png",
   },
-}
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
     <html lang="en" className="light">
@@ -39,5 +39,5 @@ export default function RootLayout({
         <Toaster />
       </body>
     </html>
-  )
+  );
 }

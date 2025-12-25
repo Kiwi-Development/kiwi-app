@@ -1,19 +1,25 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { AppLayout } from "../../../../components/app-layout"
-import { StepIndicator } from "../../../../components/test-wizard/step-indicator"
-import { Button } from "../../../../components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../../components/ui/card"
-import { Input } from "../../../../components/ui/input"
-import { Label } from "../../../../components/ui/label"
-import { Textarea } from "../../../../components/ui/textarea"
-import { Badge } from "../../../../components/ui/badge"
-import { Checkbox } from "../../../../components/ui/checkbox"
-import { useToast } from "../../../../../hooks/use-toast"
-import { useRouter } from "next/navigation"
-import { CheckCircle2, GripVertical, Plus, Trash2 } from "lucide-react"
-import { testStore } from "../../../../lib/test-store"
+import { useState } from "react";
+import { AppLayout } from "../../../../components/app-layout";
+import { StepIndicator } from "../../../../components/test-wizard/step-indicator";
+import { Button } from "../../../../components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../../../components/ui/card";
+import { Input } from "../../../../components/ui/input";
+import { Label } from "../../../../components/ui/label";
+import { Textarea } from "../../../../components/ui/textarea";
+import { Badge } from "../../../../components/ui/badge";
+import { Checkbox } from "../../../../components/ui/checkbox";
+import { useToast } from "../../../../../hooks/use-toast";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, GripVertical, Plus, Trash2 } from "lucide-react";
+import { testStore } from "../../../../lib/test-store";
 import {
   Dialog,
   DialogContent,
@@ -21,21 +27,21 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "../../../../components/ui/dialog"
-import { personaStore, type Persona } from "../../../../lib/persona-store"
+} from "../../../../components/ui/dialog";
+import { personaStore, type Persona } from "../../../../lib/persona-store";
 
 export default function NewTestPage() {
-  const [currentStep, setCurrentStep] = useState(1)
-  const [testName, setTestName] = useState("")
-  const [goal, setGoal] = useState("")
+  const [currentStep, setCurrentStep] = useState(1);
+  const [testName, setTestName] = useState("");
+  const [goal, setGoal] = useState("");
 
-  const [useCase, setUseCase] = useState("")
-  const [mutation, setMutation] = useState([2])
-  const [prototypeType, setPrototypeType] = useState<"" | "live" | "figma">("")
-  const [figmaUrl, setFigmaUrl] = useState("")
-  const [liveUrl, setLiveUrl] = useState("")
+  const [useCase, setUseCase] = useState("");
+  const [mutation, setMutation] = useState([2]);
+  const [prototypeType, setPrototypeType] = useState<"" | "live" | "figma">("");
+  const [figmaUrl, setFigmaUrl] = useState("");
+  const [liveUrl, setLiveUrl] = useState("");
 
-  const [tasks, setTasks] = useState<string[]>([])
+  const [tasks, setTasks] = useState<string[]>([]);
   const [heuristics, setHeuristics] = useState({
     visibility: true,
     realWorld: true,
@@ -44,26 +50,26 @@ export default function NewTestPage() {
     recognition: true,
     consistency: true,
     a11y: true,
-  })
-  const [policyBanner, setPolicyBanner] = useState(true)
-  const [personaDialogOpen, setPersonaDialogOpen] = useState(false)
-  const [newPersonaName, setNewPersonaName] = useState("")
-  const [newPersonaRole, setNewPersonaRole] = useState("")
-  const [newPersonaTags, setNewPersonaTags] = useState<string[]>([])
-  const [newPersonaGoals, setNewPersonaGoals] = useState("")
-  const [newPersonaBehaviors, setNewPersonaBehaviors] = useState("")
-  const [newPersonaFrustrations, setNewPersonaFrustrations] = useState("")
-  const [newPersonaConstraints, setNewPersonaConstraints] = useState("")
-  const [newPersonaAccessibility, setNewPersonaAccessibility] = useState("")
-  const { toast } = useToast()
-  const router = useRouter()
-  const [selectedPersona, setSelectedPersona] = useState<string>("")
-  const [errors, setErrors] = useState<Record<string, boolean>>({})
+  });
+  const [policyBanner, setPolicyBanner] = useState(true);
+  const [personaDialogOpen, setPersonaDialogOpen] = useState(false);
+  const [newPersonaName, setNewPersonaName] = useState("");
+  const [newPersonaRole, setNewPersonaRole] = useState("");
+  const [newPersonaTags, setNewPersonaTags] = useState<string[]>([]);
+  const [newPersonaGoals, setNewPersonaGoals] = useState("");
+  const [newPersonaBehaviors, setNewPersonaBehaviors] = useState("");
+  const [newPersonaFrustrations, setNewPersonaFrustrations] = useState("");
+  const [newPersonaConstraints, setNewPersonaConstraints] = useState("");
+  const [newPersonaAccessibility, setNewPersonaAccessibility] = useState("");
+  const { toast } = useToast();
+  const router = useRouter();
+  const [selectedPersona, setSelectedPersona] = useState<string>("");
+  const [errors, setErrors] = useState<Record<string, boolean>>({});
 
   // Task management state
-  const [taskDialogOpen, setTaskDialogOpen] = useState(false)
-  const [newTaskContent, setNewTaskContent] = useState("")
-  const [draggedTaskIndex, setDraggedTaskIndex] = useState<number | null>(null)
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [newTaskContent, setNewTaskContent] = useState("");
+  const [draggedTaskIndex, setDraggedTaskIndex] = useState<number | null>(null);
 
   const availableTags = [
     "Non-technical",
@@ -74,62 +80,60 @@ export default function NewTestPage() {
     "Expert user",
     "First-time user",
     "Non-native English",
-  ]
-
-
+  ];
 
   const handleNext = () => {
-    const newErrors: Record<string, boolean> = {}
-    let isValid = true
+    const newErrors: Record<string, boolean> = {};
+    let isValid = true;
 
     if (currentStep === 1) {
       if (!testName.trim()) {
-        newErrors.testName = true
-        isValid = false
+        newErrors.testName = true;
+        isValid = false;
       }
       if (!goal.trim()) {
-        newErrors.goal = true
-        isValid = false
+        newErrors.goal = true;
+        isValid = false;
       }
     } else if (currentStep === 2) {
       if (!selectedPersona) {
-        newErrors.selectedPersona = true
-        isValid = false
+        newErrors.selectedPersona = true;
+        isValid = false;
       }
       if (!useCase.trim()) {
-        newErrors.useCase = true
-        isValid = false
+        newErrors.useCase = true;
+        isValid = false;
       }
     } else if (currentStep === 3) {
       if (!prototypeType) {
-        newErrors.prototypeType = true
-        isValid = false
+        newErrors.prototypeType = true;
+        isValid = false;
       } else if (prototypeType === "figma" && !figmaUrl.trim()) {
-        newErrors.figmaUrl = true
-        isValid = false
+        newErrors.figmaUrl = true;
+        isValid = false;
       } else if (prototypeType === "live" && !liveUrl.trim()) {
-        newErrors.liveUrl = true
-        isValid = false
+        newErrors.liveUrl = true;
+        isValid = false;
       }
     } else if (currentStep === 4) {
       if (tasks.length === 0) {
-        newErrors.tasks = true
-        isValid = false
+        newErrors.tasks = true;
+        isValid = false;
       }
     }
 
-    setErrors(newErrors)
+    setErrors(newErrors);
 
     if (isValid && currentStep < 5) {
-      setCurrentStep(currentStep + 1)
+      setCurrentStep(currentStep + 1);
     }
-  }
+  };
 
   const handleBack = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
+      setCurrentStep(currentStep - 1);
     }
-  }
+  };
 
   const handleSavePersona = () => {
     if (!newPersonaName || !newPersonaRole) {
@@ -137,67 +141,69 @@ export default function NewTestPage() {
         title: "Error",
         description: "Please fill in name and role",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     toast({
       title: "Persona created",
       description: `${newPersonaName} has been added to your personas`,
-    })
+    });
 
-    setPersonaDialogOpen(false)
-    setNewPersonaName("")
-    setNewPersonaRole("")
-    setNewPersonaTags([])
-    setNewPersonaGoals("")
-    setNewPersonaBehaviors("")
-    setNewPersonaFrustrations("")
-    setNewPersonaConstraints("")
-    setNewPersonaAccessibility("")
-  }
+    setPersonaDialogOpen(false);
+    setNewPersonaName("");
+    setNewPersonaRole("");
+    setNewPersonaTags([]);
+    setNewPersonaGoals("");
+    setNewPersonaBehaviors("");
+    setNewPersonaFrustrations("");
+    setNewPersonaConstraints("");
+    setNewPersonaAccessibility("");
+  };
 
   const selectPersona = (personaId: string) => {
-    setSelectedPersona(personaId)
-  }
+    setSelectedPersona(personaId);
+  };
 
   const toggleTag = (tag: string) => {
-    setNewPersonaTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
-  }
+    setNewPersonaTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
 
   const handleAddTask = () => {
-    if (!newTaskContent.trim()) return
-    setTasks([...tasks, newTaskContent])
-    setNewTaskContent("")
-    setTaskDialogOpen(false)
-  }
+    if (!newTaskContent.trim()) return;
+    setTasks([...tasks, newTaskContent]);
+    setNewTaskContent("");
+    setTaskDialogOpen(false);
+  };
 
   const handleDeleteTask = (index: number) => {
-    const newTasks = [...tasks]
-    newTasks.splice(index, 1)
-    setTasks(newTasks)
-  }
+    const newTasks = [...tasks];
+    newTasks.splice(index, 1);
+    setTasks(newTasks);
+  };
 
   const handleDragStart = (index: number) => {
-    setDraggedTaskIndex(index)
-  }
+    setDraggedTaskIndex(index);
+  };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault()
-    if (draggedTaskIndex === null || draggedTaskIndex === index) return
+    e.preventDefault();
+    if (draggedTaskIndex === null || draggedTaskIndex === index) return;
 
-    const newTasks = [...tasks]
-    const draggedTask = newTasks[draggedTaskIndex]
-    newTasks.splice(draggedTaskIndex, 1)
-    newTasks.splice(index, 0, draggedTask)
+    const newTasks = [...tasks];
+    const draggedTask = newTasks[draggedTaskIndex];
+    newTasks.splice(draggedTaskIndex, 1);
+    newTasks.splice(index, 0, draggedTask);
 
-    setTasks(newTasks)
-    setDraggedTaskIndex(index)
-  }
+    setTasks(newTasks);
+    setDraggedTaskIndex(index);
+  };
 
   const handleDragEnd = () => {
-    setDraggedTaskIndex(null)
-  }
+    setDraggedTaskIndex(null);
+  };
 
   const handleRunSimulation = () => {
     //   if (selectedPersonas.length === 0) {
@@ -227,10 +233,12 @@ export default function NewTestPage() {
       title: testName,
       status: "running" as const,
       lastRun: "Just now",
-      personas: selectedPersona ? (() => {
-        const persona = personaStore.getPersonas().find(p => p.id === selectedPersona)
-        return persona ? [`${persona.name} / ${persona.role}`] : []
-      })() : [],
+      personas: selectedPersona
+        ? (() => {
+            const persona = personaStore.getPersonas().find((p) => p.id === selectedPersona);
+            return persona ? [`${persona.name} / ${persona.role}`] : [];
+          })()
+        : [],
       artifactType: prototypeType === "figma" ? "Figma" : "Live URL",
       createdAt: Date.now(),
       testData: {
@@ -242,16 +250,16 @@ export default function NewTestPage() {
         figmaUrlA: figmaUrl,
         liveUrl,
       },
-    }
+    };
 
-    testStore.saveTest(newTest)
+    testStore.saveTest(newTest);
 
     toast({
       title: "Simulation started",
       description: "Running test with 3 persona variants",
-    })
-    router.push(`/dashboard/runs/${newTest.id}`)
-  }
+    });
+    router.push(`/dashboard/runs/${newTest.id}`);
+  };
 
   const getMutationDescription = (level: number) => {
     const descriptions = [
@@ -259,9 +267,9 @@ export default function NewTestPage() {
       "Minor variations - occasional unexpected actions",
       "Moderate exploration - tests edge cases and alternatives",
       "High variance - explores multiple paths and failure modes",
-    ]
-    return descriptions[level] || descriptions[0]
-  }
+    ];
+    return descriptions[level] || descriptions[0];
+  };
 
   return (
     <AppLayout>
@@ -272,7 +280,9 @@ export default function NewTestPage() {
           <Card>
             <CardHeader>
               <CardTitle>Test Basics</CardTitle>
-              <CardDescription>Set up the fundamental details of your usability test</CardDescription>
+              <CardDescription>
+                Set up the fundamental details of your usability test
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
@@ -296,7 +306,6 @@ export default function NewTestPage() {
                   className={`min-h-24 ${errors.goal ? "border-red-500" : ""}`}
                 />
               </div>
-
             </CardContent>
           </Card>
         )}
@@ -311,18 +320,24 @@ export default function NewTestPage() {
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label>Select Persona *</Label>
-                  <div className={`space-y-2 ${errors.selectedPersona ? "border border-red-500 rounded-lg p-2" : ""}`}>
+                  <div
+                    className={`space-y-2 ${errors.selectedPersona ? "border border-red-500 rounded-lg p-2" : ""}`}
+                  >
                     {personaStore.getPersonas().map((persona) => (
                       <div
                         key={persona.id}
-                        className={`flex items-center space-x-3 rounded-lg border p-3 cursor-pointer transition-colors ${selectedPersona === persona.id
-                          ? 'bg-primary/10 border-primary'
-                          : 'hover:bg-accent/50'
-                          }`}
+                        className={`flex items-center space-x-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                          selectedPersona === persona.id
+                            ? "bg-primary/10 border-primary"
+                            : "hover:bg-accent/50"
+                        }`}
                         onClick={() => selectPersona(persona.id)}
                       >
-                        <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${selectedPersona === persona.id ? 'border-primary' : 'border-input'
-                          }`}>
+                        <div
+                          className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
+                            selectedPersona === persona.id ? "border-primary" : "border-input"
+                          }`}
+                        >
                           {selectedPersona === persona.id && (
                             <div className="h-3 w-3 rounded-full bg-primary" />
                           )}
@@ -330,7 +345,7 @@ export default function NewTestPage() {
                         <div>
                           <div className="font-medium">{persona.name}</div>
                           <div className="text-sm text-muted-foreground">
-                            {persona.role} • {persona.tags.join(' • ')}
+                            {persona.role} • {persona.tags.join(" • ")}
                           </div>
                         </div>
                       </div>
@@ -373,7 +388,8 @@ export default function NewTestPage() {
                   <DialogHeader>
                     <DialogTitle>Create New Persona</DialogTitle>
                     <DialogDescription>
-                      Add a new user persona for testing. Personas help simulate different user behaviors.
+                      Add a new user persona for testing. Personas help simulate different user
+                      behaviors.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
@@ -465,17 +481,20 @@ export default function NewTestPage() {
                     </div>
                   </div>
                   <div className="flex justify-end gap-3">
-                    <Button variant="outline" onClick={() => {
-                      setPersonaDialogOpen(false)
-                      setNewPersonaName("")
-                      setNewPersonaRole("")
-                      setNewPersonaTags([])
-                      setNewPersonaGoals("")
-                      setNewPersonaBehaviors("")
-                      setNewPersonaFrustrations("")
-                      setNewPersonaConstraints("")
-                      setNewPersonaAccessibility("")
-                    }}>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setPersonaDialogOpen(false);
+                        setNewPersonaName("");
+                        setNewPersonaRole("");
+                        setNewPersonaTags([]);
+                        setNewPersonaGoals("");
+                        setNewPersonaBehaviors("");
+                        setNewPersonaFrustrations("");
+                        setNewPersonaConstraints("");
+                        setNewPersonaAccessibility("");
+                      }}
+                    >
                       Cancel
                     </Button>
                     <Button
@@ -485,31 +504,31 @@ export default function NewTestPage() {
                             title: "Error",
                             description: "Please fill in name and role",
                             variant: "destructive",
-                          })
-                          return
+                          });
+                          return;
                         }
 
                         const newPersona = personaStore.addPersona({
                           name: newPersonaName,
                           role: newPersonaRole,
                           tags: newPersonaTags,
-                          goals: newPersonaGoals.split('\n').filter(Boolean),
-                          behaviors: newPersonaBehaviors.split('\n').filter(Boolean),
-                          frustrations: newPersonaFrustrations.split('\n').filter(Boolean),
-                          constraints: newPersonaConstraints.split('\n').filter(Boolean),
-                          accessibility: newPersonaAccessibility.split('\n').filter(Boolean),
-                        })
+                          goals: newPersonaGoals.split("\n").filter(Boolean),
+                          behaviors: newPersonaBehaviors.split("\n").filter(Boolean),
+                          frustrations: newPersonaFrustrations.split("\n").filter(Boolean),
+                          constraints: newPersonaConstraints.split("\n").filter(Boolean),
+                          accessibility: newPersonaAccessibility.split("\n").filter(Boolean),
+                        });
 
-                        setSelectedPersona(newPersona.id)
-                        setPersonaDialogOpen(false)
-                        setNewPersonaName("")
-                        setNewPersonaRole("")
-                        setNewPersonaTags([])
-                        setNewPersonaGoals("")
-                        setNewPersonaBehaviors("")
-                        setNewPersonaFrustrations("")
-                        setNewPersonaConstraints("")
-                        setNewPersonaAccessibility("")
+                        setSelectedPersona(newPersona.id);
+                        setPersonaDialogOpen(false);
+                        setNewPersonaName("");
+                        setNewPersonaRole("");
+                        setNewPersonaTags([]);
+                        setNewPersonaGoals("");
+                        setNewPersonaBehaviors("");
+                        setNewPersonaFrustrations("");
+                        setNewPersonaConstraints("");
+                        setNewPersonaAccessibility("");
                       }}
                     >
                       Create Persona
@@ -530,7 +549,9 @@ export default function NewTestPage() {
             <CardContent className="space-y-6">
               {!prototypeType && (
                 <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">Choose how you'd like to add your prototype *</p>
+                  <p className="text-sm text-muted-foreground">
+                    Choose how you&apos;d like to add your prototype *
+                  </p>
                   <div className="grid gap-3 md:grid-cols-2">
                     <Button
                       variant="outline"
@@ -560,9 +581,9 @@ export default function NewTestPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => {
-                        setPrototypeType("")
-                        setFigmaUrl("")
-                        setFigmaUrl("")
+                        setPrototypeType("");
+                        setFigmaUrl("");
+                        setFigmaUrl("");
                       }}
                     >
                       Change
@@ -574,15 +595,13 @@ export default function NewTestPage() {
                       id="figmaUrl"
                       value={figmaUrl}
                       onChange={(e) => {
-                        const url = e.target.value.replace("&show-proto-sidebar=1", "")
-                        setFigmaUrl(url)
+                        const url = e.target.value.replace("&show-proto-sidebar=1", "");
+                        setFigmaUrl(url);
                       }}
                       placeholder="https://www.figma.com/proto/..."
                       className={errors.figmaUrl ? "border-red-500" : ""}
                     />
                   </div>
-
-
                 </div>
               )}
 
@@ -594,9 +613,9 @@ export default function NewTestPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => {
-                        setPrototypeType("")
-                        setLiveUrl("")
-                        setLiveUrl("")
+                        setPrototypeType("");
+                        setLiveUrl("");
+                        setLiveUrl("");
                       }}
                     >
                       Change
@@ -612,8 +631,6 @@ export default function NewTestPage() {
                       className={errors.liveUrl ? "border-red-500" : ""}
                     />
                   </div>
-
-
                 </div>
               )}
             </CardContent>
@@ -631,8 +648,9 @@ export default function NewTestPage() {
                 {tasks.map((task, index) => (
                   <div
                     key={index}
-                    className={`flex items-start gap-3 p-3 rounded-lg border border-border group bg-background ${draggedTaskIndex === index ? 'opacity-50' : ''
-                      }`}
+                    className={`flex items-start gap-3 p-3 rounded-lg border border-border group bg-background ${
+                      draggedTaskIndex === index ? "opacity-50" : ""
+                    }`}
                     draggable
                     onDragStart={() => handleDragStart(index)}
                     onDragOver={(e) => handleDragOver(e, index)}
@@ -657,7 +675,11 @@ export default function NewTestPage() {
                 ))}
                 <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className={`w-full bg-transparent ${errors.tasks ? "border-red-500" : ""}`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`w-full bg-transparent ${errors.tasks ? "border-red-500" : ""}`}
+                    >
                       <Plus className="h-4 w-4 mr-2" />
                       Add Task
                     </Button>
@@ -704,7 +726,9 @@ export default function NewTestPage() {
                   <Checkbox
                     id="visibility"
                     checked={heuristics.visibility}
-                    onCheckedChange={(checked) => setHeuristics({ ...heuristics, visibility: !!checked })}
+                    onCheckedChange={(checked) =>
+                      setHeuristics({ ...heuristics, visibility: !!checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -714,7 +738,9 @@ export default function NewTestPage() {
                   <Checkbox
                     id="realWorld"
                     checked={heuristics.realWorld}
-                    onCheckedChange={(checked) => setHeuristics({ ...heuristics, realWorld: !!checked })}
+                    onCheckedChange={(checked) =>
+                      setHeuristics({ ...heuristics, realWorld: !!checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -724,7 +750,9 @@ export default function NewTestPage() {
                   <Checkbox
                     id="userControl"
                     checked={heuristics.userControl}
-                    onCheckedChange={(checked) => setHeuristics({ ...heuristics, userControl: !!checked })}
+                    onCheckedChange={(checked) =>
+                      setHeuristics({ ...heuristics, userControl: !!checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -734,7 +762,9 @@ export default function NewTestPage() {
                   <Checkbox
                     id="errorPrevention"
                     checked={heuristics.errorPrevention}
-                    onCheckedChange={(checked) => setHeuristics({ ...heuristics, errorPrevention: !!checked })}
+                    onCheckedChange={(checked) =>
+                      setHeuristics({ ...heuristics, errorPrevention: !!checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -744,7 +774,9 @@ export default function NewTestPage() {
                   <Checkbox
                     id="recognition"
                     checked={heuristics.recognition}
-                    onCheckedChange={(checked) => setHeuristics({ ...heuristics, recognition: !!checked })}
+                    onCheckedChange={(checked) =>
+                      setHeuristics({ ...heuristics, recognition: !!checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -754,7 +786,9 @@ export default function NewTestPage() {
                   <Checkbox
                     id="consistency"
                     checked={heuristics.consistency}
-                    onCheckedChange={(checked) => setHeuristics({ ...heuristics, consistency: !!checked })}
+                    onCheckedChange={(checked) =>
+                      setHeuristics({ ...heuristics, consistency: !!checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -798,14 +832,18 @@ export default function NewTestPage() {
                   <h4 className="text-sm font-semibold mb-2">Personas</h4>
                   <div className="space-y-3">
                     <div className="flex flex-wrap gap-2">
-                      {selectedPersona ? (() => {
-                        const persona = personaStore.getPersonas().find(p => p.id === selectedPersona)
-                        return persona ? (
-                          <Badge key={persona.id} variant="secondary">
-                            {persona.name} / {persona.role}
-                          </Badge>
-                        ) : null
-                      })() : (
+                      {selectedPersona ? (
+                        (() => {
+                          const persona = personaStore
+                            .getPersonas()
+                            .find((p) => p.id === selectedPersona);
+                          return persona ? (
+                            <Badge key={persona.id} variant="secondary">
+                              {persona.name} / {persona.role}
+                            </Badge>
+                          ) : null;
+                        })()
+                      ) : (
                         <span className="text-sm text-muted-foreground">No persona selected</span>
                       )}
                     </div>
@@ -852,8 +890,8 @@ export default function NewTestPage() {
                           recognition: "Recognition over recall",
                           consistency: "Consistency and standards",
                           a11y: "Quick accessibility scan",
-                        }
-                        return <div key={key}>• {labels[key]}</div>
+                        };
+                        return <div key={key}>• {labels[key]}</div>;
                       })}
                   </div>
                 </div>
@@ -889,5 +927,5 @@ export default function NewTestPage() {
         </div>
       </main>
     </AppLayout>
-  )
+  );
 }

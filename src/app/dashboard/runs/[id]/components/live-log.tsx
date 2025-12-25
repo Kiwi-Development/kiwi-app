@@ -1,51 +1,51 @@
-"use client"
+"use client";
 
-import { useEffect, useRef, useState } from "react"
-import { Button } from "../../../../../components/ui/button"
-import { ChevronDown } from "lucide-react"
+import { useEffect, useRef, useState } from "react";
+import { Button } from "../../../../../components/ui/button";
+import { ChevronDown } from "lucide-react";
 
 interface LogEntry {
-  t: number
-  text: string
+  t: number;
+  text: string;
 }
 
 interface LiveLogProps {
-  logs: LogEntry[]
-  startTime?: number
+  logs: LogEntry[];
+  startTime?: number;
 }
 
-export function LiveLog({ logs, startTime = Date.now() }: LiveLogProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [autoScroll, setAutoScroll] = useState(true)
+export function LiveLog({ logs, startTime }: LiveLogProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
 
   useEffect(() => {
     if (autoScroll && containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [logs, autoScroll])
+  }, [logs, autoScroll]);
 
   const handleScroll = () => {
-    if (!containerRef.current) return
+    if (!containerRef.current) return;
 
-    const { scrollTop, scrollHeight, clientHeight } = containerRef.current
-    const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 10
-    setAutoScroll(isAtBottom)
-  }
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 10;
+    setAutoScroll(isAtBottom);
+  };
 
   const scrollToBottom = () => {
     if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight
-      setAutoScroll(true)
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      setAutoScroll(true);
     }
-  }
+  };
 
   const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp)
-    const hours = date.getHours().toString().padStart(2, "0")
-    const mins = date.getMinutes().toString().padStart(2, "0")
-    const secs = date.getSeconds().toString().padStart(2, "0")
-    return `${hours}:${mins}:${secs}`
-  }
+    const date = new Date(timestamp);
+    const hours = date.getHours().toString().padStart(2, "0");
+    const mins = date.getMinutes().toString().padStart(2, "0");
+    const secs = date.getSeconds().toString().padStart(2, "0");
+    return `${hours}:${mins}:${secs}`;
+  };
 
   return (
     <div className="relative">
@@ -75,5 +75,5 @@ export function LiveLog({ logs, startTime = Date.now() }: LiveLogProps) {
         </div>
       )}
     </div>
-  )
+  );
 }

@@ -6,11 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "dev:all": "bash scripts/start-all.sh",
+    "setup": "npm install && cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt && playwright install",
+    "check": "tsc --noEmit && eslint . && prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "fix": "eslint . --fix && prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
   "dependencies": {
-    "@aws-sdk/client-ec2": "^3.937.0",
-    "@aws-sdk/client-ecs": "^3.937.0",
     "@calcom/embed-react": "^1.5.3",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -76,6 +77,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
     "postcss": "^8.5.6",
+    "prettier": "^3.4.2",
     "supabase": "^2.58.5",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3"

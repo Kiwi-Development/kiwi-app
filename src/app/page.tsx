@@ -1,42 +1,42 @@
-"use client"
+"use client";
 
-import { Button } from "../components/ui/button"
-import { Input } from "../components/ui/input"
-import { Badge } from "../components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar"
-import { CalProvider, CalButton } from "../components/Cal"
-import { LoginModal } from "@/components/auth/LoginModal"
-import { SignUpModal } from "@/components/auth/SignUpModal"
-import { MousePointer2 } from "lucide-react"
-import Image from "next/image"
-import { toast } from "sonner"
-import { useState, Suspense } from "react"
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Badge } from "../components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
+import { CalProvider, CalButton } from "../components/Cal";
+import { LoginModal } from "@/components/auth/LoginModal";
+import { SignUpModal } from "@/components/auth/SignUpModal";
+import { MousePointer2 } from "lucide-react";
+import Image from "next/image";
+import { toast } from "sonner";
+import { useState, Suspense } from "react";
 
 function WaitlistForm() {
-  const [email, setEmail] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
 
     try {
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
-      })
+      });
 
-      if (!res.ok) throw new Error("Failed to join")
+      if (!res.ok) throw new Error("Failed to join");
 
-      toast.success("You've been added to the waitlist!")
-      setEmail("")
+      toast.success("You've been added to the waitlist!");
+      setEmail("");
     } catch (error) {
-      toast.error("Something went wrong. Please try again.")
+      toast.error("Something went wrong. Please try again.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-md relative mb-12">
@@ -56,7 +56,7 @@ function WaitlistForm() {
         {loading ? "Joining..." : "Join Waitlist"}
       </Button>
     </form>
-  )
+  );
 }
 
 function Logo() {
@@ -71,7 +71,7 @@ function Logo() {
         className="w-full h-auto"
       />
     </div>
-  )
+  );
 }
 
 function Cursor({
@@ -80,24 +80,23 @@ function Cursor({
   className,
   flipped = false,
 }: {
-  text: string
-  color?: string
-  className?: string
-  flipped?: boolean
+  text: string;
+  color?: string;
+  className?: string;
+  flipped?: boolean;
 }) {
   return (
     <div className={`absolute flex items-start gap-2 ${className} pointer-events-none z-20`}>
-      <MousePointer2
-        className={`h-5 w-5 ${flipped ? "-scale-x-100" : ""} fill-black text-black`}
-      />
+      <MousePointer2 className={`h-5 w-5 ${flipped ? "-scale-x-100" : ""} fill-black text-black`} />
       <div
-        className={`${color} text-white px-3 py-1.5 rounded-full rounded-tl-none text-sm font-medium shadow-lg ${flipped ? "rounded-tr-none rounded-tl-full" : ""
-          }`}
+        className={`${color} text-white px-3 py-1.5 rounded-full rounded-tl-none text-sm font-medium shadow-lg ${
+          flipped ? "rounded-tr-none rounded-tl-full" : ""
+        }`}
       >
         {text}
       </div>
     </div>
-  )
+  );
 }
 
 export default function Home() {
@@ -117,7 +116,10 @@ export default function Home() {
                 Book a Demo
               </CalButton>
               <LoginModal>
-                <Button variant="ghost" className="rounded-full font-normal text-base px-6 h-10 py-2 bg-white border shadow-sm hover:bg-white">
+                <Button
+                  variant="ghost"
+                  className="rounded-full font-normal text-base px-6 h-10 py-2 bg-white border shadow-sm hover:bg-white"
+                >
                   Log in
                 </Button>
               </LoginModal>
@@ -126,7 +128,10 @@ export default function Home() {
 
           {/* Hero Section */}
           <div className="flex flex-col items-center justify-center pt-12 pb-24 px-4 text-center relative max-w-5xl mx-auto z-10">
-            <Badge variant="secondary" className="mb-8 px-4 py-1.5 rounded-full text-sm font-normal bg-white border shadow-sm hover:bg-white">
+            <Badge
+              variant="secondary"
+              className="mb-8 px-4 py-1.5 rounded-full text-sm font-normal bg-white border shadow-sm hover:bg-white"
+            >
               Coming Soon
             </Badge>
 
@@ -190,5 +195,5 @@ export default function Home() {
         </Suspense>
       </div>
     </CalProvider>
-  )
+  );
 }

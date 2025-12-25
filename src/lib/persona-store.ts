@@ -1,24 +1,24 @@
 export type Persona = {
-  id: string
-  name: string
-  role: string
-  tags: string[]
-  goals: string[]
-  behaviors: string[]
-  frustrations: string[]
-  constraints: string[]
-  accessibility: string[]
-  lastUsed: string
-}
+  id: string;
+  name: string;
+  role: string;
+  tags: string[];
+  goals: string[];
+  behaviors: string[];
+  frustrations: string[];
+  constraints: string[];
+  accessibility: string[];
+  lastUsed: string;
+};
 
 class PersonaStore {
-  private storageKey = "kiwi_personas"
+  private storageKey = "kiwi_personas";
 
   getPersonas(): Persona[] {
-    if (typeof window === "undefined") return []
-    const stored = localStorage.getItem(this.storageKey)
-    if (!stored) return this.getDefaultPersonas()
-    return JSON.parse(stored)
+    if (typeof window === "undefined") return [];
+    const stored = localStorage.getItem(this.storageKey);
+    if (!stored) return this.getDefaultPersonas();
+    return JSON.parse(stored);
   }
 
   private getDefaultPersonas(): Persona[] {
@@ -33,7 +33,7 @@ class PersonaStore {
         frustrations: ["Slow loading times", "Complex navigation"],
         constraints: ["Limited technical knowledge", "Tight deadlines"],
         accessibility: ["Prefers high contrast"],
-        lastUsed: "2 hours ago"
+        lastUsed: "2 hours ago",
       },
       {
         id: "2",
@@ -45,36 +45,36 @@ class PersonaStore {
         frustrations: ["Inconsistent UI", "Lack of customization"],
         constraints: ["Mobile-only access sometimes"],
         accessibility: [],
-        lastUsed: "1 day ago"
-      }
-    ]
+        lastUsed: "1 day ago",
+      },
+    ];
   }
 
-  addPersona(persona: Omit<Persona, 'id' | 'lastUsed'>) {
-    const personas = this.getPersonas()
+  addPersona(persona: Omit<Persona, "id" | "lastUsed">) {
+    const personas = this.getPersonas();
     const newPersona = {
       ...persona,
       id: Date.now().toString(),
-      lastUsed: "Just now"
-    }
-    const updated = [...personas, newPersona]
-    localStorage.setItem(this.storageKey, JSON.stringify(updated))
-    return newPersona
+      lastUsed: "Just now",
+    };
+    const updated = [...personas, newPersona];
+    localStorage.setItem(this.storageKey, JSON.stringify(updated));
+    return newPersona;
   }
 
-  updatePersona(id: string, updates: Partial<Omit<Persona, 'id'>>) {
-    const personas = this.getPersonas()
-    const updated = personas.map(p => 
+  updatePersona(id: string, updates: Partial<Omit<Persona, "id">>) {
+    const personas = this.getPersonas();
+    const updated = personas.map((p) =>
       p.id === id ? { ...p, ...updates, lastUsed: "Just now" } : p
-    )
-    localStorage.setItem(this.storageKey, JSON.stringify(updated))
-    return updated.find(p => p.id === id)
+    );
+    localStorage.setItem(this.storageKey, JSON.stringify(updated));
+    return updated.find((p) => p.id === id);
   }
 
   deletePersona(id: string) {
-    const updated = this.getPersonas().filter(p => p.id !== id)
-    localStorage.setItem(this.storageKey, JSON.stringify(updated))
+    const updated = this.getPersonas().filter((p) => p.id !== id);
+    localStorage.setItem(this.storageKey, JSON.stringify(updated));
   }
 }
 
-export const personaStore = new PersonaStore()
+export const personaStore = new PersonaStore();

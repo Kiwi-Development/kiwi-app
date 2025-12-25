@@ -11,13 +11,23 @@ import browser_controller
 import sys
 import traceback
 import logging
+from health import register_health_routes
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 app = Flask(__name__)
 app.logger.setLevel(logging.DEBUG)
-# Enable CORS for all routes
-CORS(app)
+# Enable CORS for all routes with more permissive settings
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
+
+# Register health check routes
+register_health_routes(app)
 
 # Create a dedicated event loop for Playwright to run in a separate thread
 playwright_loop = asyncio.new_event_loop()
@@ -125,4 +135,6 @@ def screenshot():
         return jsonify({"status": "error", "message": str(e), "details": error_details}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    import os
+    port = int(os.environ.get('PORT', 5001))
+    app.run(host='0.0.0.0', port=port)

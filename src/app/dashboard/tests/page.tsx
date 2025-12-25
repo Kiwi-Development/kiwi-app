@@ -1,16 +1,22 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useEffect, useState } from "react"
-import { AppLayout } from "../../../components/app-layout"
-import { Button } from "../../../components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs"
-import { Badge } from "../../../components/ui/badge"
-import Link from "next/link"
-import { Clock, Users, Target, Trash2 } from "lucide-react"
-import { testStore, type Test } from "../../../lib/test-store"
+import { useEffect, useState } from "react";
+import { AppLayout } from "../../../components/app-layout";
+import { Button } from "../../../components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../../components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs";
+import { Badge } from "../../../components/ui/badge";
+import Link from "next/link";
+import { Clock, Users, Target, Trash2 } from "lucide-react";
+import { testStore, type Test } from "../../../lib/test-store";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,73 +26,77 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "../../../components/ui/alert-dialog"
+} from "../../../components/ui/alert-dialog";
 
 export default function TestsPage() {
-  const [tests, setTests] = useState<Test[]>([])
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [testToDelete, setTestToDelete] = useState<string | null>(null)
+  const [tests, setTests] = useState<Test[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [testToDelete, setTestToDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    setTests(testStore.getTests())
+    // Initialize state from store - this is acceptable for one-time initialization
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTests(testStore.getTests());
 
     const interval = setInterval(() => {
-      const currentTests = testStore.getTests()
-      setTests([...currentTests])
-    }, 1000)
+      const currentTests = testStore.getTests();
+      setTests([...currentTests]);
+    }, 1000);
 
-    return () => clearInterval(interval)
-  }, [])
+    return () => clearInterval(interval);
+  }, []);
 
   const handleDeleteClick = (e: React.MouseEvent, testId: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setTestToDelete(testId)
-    setDeleteDialogOpen(true)
-  }
+    e.preventDefault();
+    e.stopPropagation();
+    setTestToDelete(testId);
+    setDeleteDialogOpen(true);
+  };
 
   const confirmDelete = () => {
     if (testToDelete) {
-      testStore.deleteTest(testToDelete)
-      setTests(testStore.getTests())
-      setTestToDelete(null)
+      testStore.deleteTest(testToDelete);
+      setTests(testStore.getTests());
+      setTestToDelete(null);
     }
-    setDeleteDialogOpen(false)
-  }
+    setDeleteDialogOpen(false);
+  };
 
   const calculateSuccessRate = (test: Test): number => {
     if (test.status === "running" && test.progressState) {
-      return Math.round((test.progressState.completedPersonas / test.progressState.totalPersonas) * 100)
+      return Math.round(
+        (test.progressState.completedPersonas / test.progressState.totalPersonas) * 100
+      );
     }
-    return test.successRate || 0
-  }
+    return test.successRate || 0;
+  };
 
   const formatTimeAgo = (timestamp: number): string => {
-    const now = Date.now()
-    const diff = now - timestamp
-    const minutes = Math.floor(diff / 60000)
-    const hours = Math.floor(diff / 3600000)
-    const days = Math.floor(diff / 86400000)
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return "Just now"
-    if (minutes < 60) return `${minutes}m ago`
-    if (hours < 24) return `${hours}h ago`
-    return `${days}d ago`
-  }
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
+  };
 
   const formatDuration = (ms: number): string => {
-    const totalSeconds = Math.floor(ms / 1000)
-    const minutes = Math.floor(totalSeconds / 60)
-    const seconds = totalSeconds % 60
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
-  }
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
 
   const getTestLink = (test: Test): string => {
     if (test.status === "completed") {
-      return `/dashboard/reports/${test.id}`
+      return `/dashboard/reports/${test.id}`;
     }
-    return `/dashboard/runs/${test.id}`
-  }
+    return `/dashboard/runs/${test.id}`;
+  };
 
   const TestCard = ({ test }: { test: Test }) => (
     <div className="relative group">
@@ -112,7 +122,10 @@ export default function TestsPage() {
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant={test.status === "completed" ? "default" : "secondary"} className="capitalize">
+                <Badge
+                  variant={test.status === "completed" ? "default" : "secondary"}
+                  className="capitalize"
+                >
                   {test.status}
                 </Badge>
                 <Button
@@ -130,12 +143,14 @@ export default function TestsPage() {
           <CardContent>
             <div className="flex items-center gap-6">
               <div>
-                <div className="text-2xl font-bold text-foreground">{calculateSuccessRate(test)}%</div>
+                <div className="text-2xl font-bold text-foreground">
+                  {calculateSuccessRate(test)}%
+                </div>
                 <div className="text-xs text-muted-foreground">Task success</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-foreground">
-                  {test.duration ? formatDuration(test.duration) : (test.avgTime || "—")}
+                  {test.duration ? formatDuration(test.duration) : test.avgTime || "—"}
                 </div>
                 <div className="text-xs text-muted-foreground">Avg time</div>
               </div>
@@ -151,12 +166,11 @@ export default function TestsPage() {
         </Card>
       </Link>
     </div>
-  )
+  );
 
   return (
     <div className="min-h-screen bg-background">
       <AppLayout>
-
         <main className="container mx-auto p-6 space-y-8">
           <div className="flex items-center justify-between">
             <div>
@@ -224,7 +238,9 @@ export default function TestsPage() {
                   </CardContent>
                 </Card>
               ) : (
-                tests.filter((t) => t.status === "draft").map((test) => <TestCard key={test.id} test={test} />)
+                tests
+                  .filter((t) => t.status === "draft")
+                  .map((test) => <TestCard key={test.id} test={test} />)
               )}
             </TabsContent>
 
@@ -238,7 +254,7 @@ export default function TestsPage() {
                     <div className="space-y-2">
                       <h3 className="text-lg font-semibold">No running tests</h3>
                       <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                        Tests will appear here while they're running
+                        Tests will appear here while they&apos;re running
                       </p>
                     </div>
                   </CardContent>
@@ -259,12 +275,16 @@ export default function TestsPage() {
                     </div>
                     <div className="space-y-2">
                       <h3 className="text-lg font-semibold">No completed tests</h3>
-                      <p className="text-sm text-muted-foreground max-w-md mx-auto">Completed tests will appear here</p>
+                      <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                        Completed tests will appear here
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
               ) : (
-                tests.filter((t) => t.status === "completed").map((test) => <TestCard key={test.id} test={test} />)
+                tests
+                  .filter((t) => t.status === "completed")
+                  .map((test) => <TestCard key={test.id} test={test} />)
               )}
             </TabsContent>
           </Tabs>
@@ -274,7 +294,8 @@ export default function TestsPage() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete test?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete the test and all associated data.
+                  This action cannot be undone. This will permanently delete the test and all
+                  associated data.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -291,5 +312,5 @@ export default function TestsPage() {
         </main>
       </AppLayout>
     </div>
-  )
+  );
 }

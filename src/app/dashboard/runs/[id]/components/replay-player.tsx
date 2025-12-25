@@ -1,191 +1,201 @@
-"use client"
+"use client";
 
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react"
-import { Button } from "../../../../../components/ui/button"
-import { Slider } from "../../../../../components/ui/slider"
-import { Play, Pause, SkipBack, SkipForward, LinkIcon, Volume2, VolumeX, Maximize, Minimize } from "lucide-react"
-import type { RunEvent } from "../model"
-import { useToast } from "../../../../../../hooks/use-toast"
-import { MarkerBar } from "./marker-bar"
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { Button } from "../../../../../components/ui/button";
+import { Slider } from "../../../../../components/ui/slider";
+import {
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  LinkIcon,
+  Volume2,
+  VolumeX,
+  Maximize,
+  Minimize,
+} from "lucide-react";
+import type { RunEvent } from "../model";
+import { useToast } from "../../../../../../hooks/use-toast";
+import { MarkerBar } from "./marker-bar";
 
 interface ReplayPlayerProps {
-  videoUrl?: string
-  events: RunEvent[]
-  onSeek?: (time: number) => void
-  initialTime?: number
+  videoUrl?: string;
+  events: RunEvent[];
+  onSeek?: (time: number) => void;
+  initialTime?: number;
 }
 
 export const ReplayPlayer = forwardRef<HTMLVideoElement, ReplayPlayerProps>(
   ({ videoUrl, events, onSeek, initialTime = 0 }, ref) => {
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const containerRef = useRef<HTMLDivElement>(null)
-    const [isPlaying, setIsPlaying] = useState(false)
-    const [currentTime, setCurrentTime] = useState(0)
-    const [duration, setDuration] = useState(0)
-    const [playbackRate, setPlaybackRate] = useState(1)
-    const [isMuted, setIsMuted] = useState(false)
-    const [isLoading, setIsLoading] = useState(true)
-    const [isFullscreen, setIsFullscreen] = useState(false)
-    const { toast } = useToast()
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [playbackRate, setPlaybackRate] = useState(1);
+    const [isMuted, setIsMuted] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const { toast } = useToast();
 
-    useImperativeHandle(ref, () => videoRef.current as HTMLVideoElement)
+    useImperativeHandle(ref, () => videoRef.current as HTMLVideoElement);
 
     useEffect(() => {
-      const video = videoRef.current
-      if (!video) return
+      const video = videoRef.current;
+      if (!video) return;
 
       const handleCanPlay = () => {
-        setIsLoading(false)
+        setIsLoading(false);
         // Autoplay when video is ready
         video
           .play()
           .then(() => {
-            setIsPlaying(true)
+            setIsPlaying(true);
           })
           .catch((error) => {
             // Autoplay might be blocked by browser, that's okay
-            console.log("[v0] Autoplay blocked:", error)
-          })
-      }
+            console.log("[v0] Autoplay blocked:", error);
+          });
+      };
 
-      const handlePlay = () => setIsPlaying(true)
-      const handlePause = () => setIsPlaying(false)
-      const handleTimeUpdate = () => setCurrentTime(video.currentTime)
-      const handleDurationChange = () => setDuration(video.duration)
-      const handleWaiting = () => setIsLoading(true)
+      const handlePlay = () => setIsPlaying(true);
+      const handlePause = () => setIsPlaying(false);
+      const handleTimeUpdate = () => setCurrentTime(video.currentTime);
+      const handleDurationChange = () => setDuration(video.duration);
+      const handleWaiting = () => setIsLoading(true);
       const handleError = () => {
         toast({
           title: "Video error",
           description: "Failed to load video. Please try again.",
           variant: "destructive",
-        })
-        setIsLoading(false)
-      }
+        });
+        setIsLoading(false);
+      };
 
-      video.addEventListener("canplay", handleCanPlay)
-      video.addEventListener("play", handlePlay)
-      video.addEventListener("pause", handlePause)
-      video.addEventListener("timeupdate", handleTimeUpdate)
-      video.addEventListener("durationchange", handleDurationChange)
-      video.addEventListener("waiting", handleWaiting)
-      video.addEventListener("error", handleError)
+      video.addEventListener("canplay", handleCanPlay);
+      video.addEventListener("play", handlePlay);
+      video.addEventListener("pause", handlePause);
+      video.addEventListener("timeupdate", handleTimeUpdate);
+      video.addEventListener("durationchange", handleDurationChange);
+      video.addEventListener("waiting", handleWaiting);
+      video.addEventListener("error", handleError);
 
       return () => {
-        video.removeEventListener("canplay", handleCanPlay)
-        video.removeEventListener("play", handlePlay)
-        video.removeEventListener("pause", handlePause)
-        video.removeEventListener("timeupdate", handleTimeUpdate)
-        video.removeEventListener("durationchange", handleDurationChange)
-        video.removeEventListener("waiting", handleWaiting)
-        video.removeEventListener("error", handleError)
-      }
-    }, [toast])
+        video.removeEventListener("canplay", handleCanPlay);
+        video.removeEventListener("play", handlePlay);
+        video.removeEventListener("pause", handlePause);
+        video.removeEventListener("timeupdate", handleTimeUpdate);
+        video.removeEventListener("durationchange", handleDurationChange);
+        video.removeEventListener("waiting", handleWaiting);
+        video.removeEventListener("error", handleError);
+      };
+    }, [toast]);
 
     useEffect(() => {
       const handleFullscreenChange = () => {
-        setIsFullscreen(!!document.fullscreenElement)
-      }
+        setIsFullscreen(!!document.fullscreenElement);
+      };
 
-      document.addEventListener("fullscreenchange", handleFullscreenChange)
-      return () => document.removeEventListener("fullscreenchange", handleFullscreenChange)
-    }, [])
+      document.addEventListener("fullscreenchange", handleFullscreenChange);
+      return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    }, []);
 
     useEffect(() => {
       if (videoRef.current && initialTime > 0) {
-        videoRef.current.currentTime = initialTime
+        videoRef.current.currentTime = initialTime;
       }
-    }, [initialTime])
+    }, [initialTime]);
 
     const togglePlay = () => {
-      const video = videoRef.current
-      if (!video) return
+      const video = videoRef.current;
+      if (!video) return;
 
       if (isPlaying) {
-        video.pause()
+        video.pause();
       } else {
-        video.play()
+        video.play();
       }
-      setIsPlaying(!isPlaying)
-    }
+      setIsPlaying(!isPlaying);
+    };
 
     const skipTime = (seconds: number) => {
-      const video = videoRef.current
-      if (!video) return
+      const video = videoRef.current;
+      if (!video) return;
 
-      const newTime = Math.max(0, Math.min(duration, currentTime + seconds))
-      video.currentTime = newTime
-      onSeek?.(newTime)
-    }
+      const newTime = Math.max(0, Math.min(duration, currentTime + seconds));
+      video.currentTime = newTime;
+      onSeek?.(newTime);
+    };
 
     const handleSeek = (value: number[]) => {
-      const video = videoRef.current
-      if (!video) return
+      const video = videoRef.current;
+      if (!video) return;
 
-      video.currentTime = value[0]
-      onSeek?.(value[0])
-    }
+      video.currentTime = value[0];
+      onSeek?.(value[0]);
+    };
 
     const changePlaybackRate = (rate: number) => {
-      const video = videoRef.current
-      if (!video) return
+      const video = videoRef.current;
+      if (!video) return;
 
-      video.playbackRate = rate
-      setPlaybackRate(rate)
-    }
+      video.playbackRate = rate;
+      setPlaybackRate(rate);
+    };
 
     const toggleMute = () => {
-      const video = videoRef.current
-      if (!video) return
+      const video = videoRef.current;
+      if (!video) return;
 
-      video.muted = !video.muted
-      setIsMuted(!video.muted)
-    }
+      video.muted = !video.muted;
+      setIsMuted(!video.muted);
+    };
 
     const toggleFullscreen = async () => {
-      const container = containerRef.current
-      if (!container) return
+      const container = containerRef.current;
+      if (!container) return;
 
       try {
         if (!document.fullscreenElement) {
-          await container.requestFullscreen()
+          await container.requestFullscreen();
         } else {
-          await document.exitFullscreen()
+          await document.exitFullscreen();
         }
       } catch (error) {
         toast({
           title: "Fullscreen error",
           description: "Unable to toggle fullscreen mode",
           variant: "destructive",
-        })
+        });
       }
-    }
+    };
 
     const copyTimestamp = () => {
-      const time = Math.round(currentTime)
-      const url = `${window.location.pathname}?t=${time}`
-      navigator.clipboard.writeText(window.location.origin + url)
+      const time = Math.round(currentTime);
+      const url = `${window.location.pathname}?t=${time}`;
+      navigator.clipboard.writeText(window.location.origin + url);
       toast({
         title: "Link copied",
         description: `Timestamp link for ${formatTime(time)} copied to clipboard`,
-      })
-    }
+      });
+    };
 
     const formatTime = (seconds: number) => {
-      const mins = Math.floor(seconds / 60)
-      const secs = Math.floor(seconds % 60)
-      return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
-    }
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    };
 
     const seekToEvent = (eventTime: number) => {
-      const video = videoRef.current
-      if (!video) return
+      const video = videoRef.current;
+      if (!video) return;
 
-      video.currentTime = eventTime
-      onSeek?.(eventTime)
+      video.currentTime = eventTime;
+      onSeek?.(eventTime);
 
       // Scroll video into view
-      video.scrollIntoView({ behavior: "smooth", block: "nearest" })
-    }
+      video.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    };
 
     return (
       <div className="space-y-4" data-testid="replay-player" ref={containerRef}>
@@ -205,7 +215,9 @@ export const ReplayPlayer = forwardRef<HTMLVideoElement, ReplayPlayerProps>(
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-2 p-6">
                 <p className="text-sm font-medium text-muted-foreground">No video configured</p>
-                <p className="text-xs text-muted-foreground">Upload or set demo video in Settings → Integrations</p>
+                <p className="text-xs text-muted-foreground">
+                  Upload or set demo video in Settings → Integrations
+                </p>
               </div>
             </div>
           )}
@@ -221,7 +233,12 @@ export const ReplayPlayer = forwardRef<HTMLVideoElement, ReplayPlayerProps>(
         <div className="space-y-3">
           {/* Progress Bar with Markers */}
           <div className="space-y-2">
-            <MarkerBar events={events} duration={duration} currentTime={currentTime} onSeek={seekToEvent} />
+            <MarkerBar
+              events={events}
+              duration={duration}
+              currentTime={currentTime}
+              onSeek={seekToEvent}
+            />
             <Slider
               value={[currentTime]}
               max={duration || 100}
@@ -324,8 +341,8 @@ export const ReplayPlayer = forwardRef<HTMLVideoElement, ReplayPlayerProps>(
           </div>
         </div>
       </div>
-    )
-  },
-)
+    );
+  }
+);
 
-ReplayPlayer.displayName = "ReplayPlayer"
+ReplayPlayer.displayName = "ReplayPlayer";

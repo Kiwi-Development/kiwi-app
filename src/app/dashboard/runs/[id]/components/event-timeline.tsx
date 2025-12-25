@@ -1,16 +1,29 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import type { RunEvent } from "@/lib/types"
-import { Badge } from "../../../../../components/ui/badge"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../../../../components/ui/tooltip"
-import { MousePointerClick, Send, ArrowLeft, AlertCircle, Zap, AlertTriangle, Focus } from "lucide-react"
+import type { RunEvent } from "@/lib/types";
+import { Badge } from "../../../../../components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../../../../../components/ui/tooltip";
+import {
+  MousePointerClick,
+  Send,
+  ArrowLeft,
+  AlertCircle,
+  Zap,
+  AlertTriangle,
+  Focus,
+} from "lucide-react";
 
 interface EventTimelineProps {
-  events: RunEvent[]
-  onEventClick: (event: RunEvent) => void
-  highlightedEventId?: string
+  events: RunEvent[];
+  onEventClick: (event: RunEvent) => void;
+  highlightedEventId?: string;
 }
 
 const eventIcons: Record<string, React.ReactNode> = {
@@ -21,7 +34,7 @@ const eventIcons: Record<string, React.ReactNode> = {
   rage: <Zap className="h-3 w-3" />,
   "copy-risk": <AlertTriangle className="h-3 w-3" />,
   "focus-trap": <Focus className="h-3 w-3" />,
-}
+};
 
 const eventVariants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   click: "secondary",
@@ -31,16 +44,16 @@ const eventVariants: Record<string, "default" | "secondary" | "destructive" | "o
   rage: "destructive",
   "copy-risk": "outline",
   "focus-trap": "destructive",
-}
+};
 
 export function EventTimeline({ events, onEventClick, highlightedEventId }: EventTimelineProps) {
   const formatTime = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000)
-    const hours = Math.floor(totalSeconds / 3600)
-    const mins = Math.floor((totalSeconds % 3600) / 60)
-    const secs = totalSeconds % 60
-    return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
-  }
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
 
   return (
     <TooltipProvider>
@@ -50,8 +63,9 @@ export function EventTimeline({ events, onEventClick, highlightedEventId }: Even
             <TooltipTrigger asChild>
               <button
                 onClick={() => onEventClick(event)}
-                className={`flex-shrink-0 transition-all ${highlightedEventId === event.id ? "ring-2 ring-primary ring-offset-2" : ""
-                  }`}
+                className={`flex-shrink-0 transition-all ${
+                  highlightedEventId === event.id ? "ring-2 ring-primary ring-offset-2" : ""
+                }`}
                 data-testid={`timeline-event-${event.id}`}
                 aria-label={`${event.label} at ${formatTime(event.t)}`}
               >
@@ -74,5 +88,5 @@ export function EventTimeline({ events, onEventClick, highlightedEventId }: Even
         ))}
       </div>
     </TooltipProvider>
-  )
+  );
 }

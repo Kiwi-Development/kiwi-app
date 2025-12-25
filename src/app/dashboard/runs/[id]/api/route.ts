@@ -1,16 +1,17 @@
-import { OpenAI } from "openai"
-import { NextResponse } from "next/server"
+import { OpenAI } from "openai";
+import { NextResponse } from "next/server";
+import { env } from "@/lib/env";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+  apiKey: env.openai.apiKey,
+});
 
 export async function POST(req: Request) {
   try {
-    const { screenshot, tasks, history, persona, currentProgress } = await req.json()
+    const { screenshot, tasks, history, persona, currentProgress } = await req.json();
 
     if (!screenshot) {
-      return NextResponse.json({ error: "Screenshot is required" }, { status: 400 })
+      return NextResponse.json({ error: "Screenshot is required" }, { status: 400 });
     }
 
     // Build base system prompt
@@ -36,24 +37,38 @@ export async function POST(req: Request) {
       You should only be clicking within the device boundaries.
 
       You have access to a 'click' tool. Use it to interact with the interface.
-      The screenshot is the current state of the browser.`
+      The screenshot is the current state of the browser.`;
 
     // At 98% progress, instruct agent to submit findings
     if (currentProgress !== undefined && currentProgress >= 94) {
-      systemPrompt += `\n\nIMPORTANT: The test is nearing completion (${currentProgress}% progress). You should now evaluate your performance and use the 'submit_findings' tool to report your results. In the taskCompletionPercentage field, honestly assess what percentage of the tasks you successfully completed (0-100). For example, if you completed 2 out of 3 tasks, report 67. If you completed all tasks, report 100. Base this on actual task completion, not just progress through the UI.`
+      systemPrompt += `\n\nIMPORTANT: The test is nearing completion (${currentProgress}% progress). You should now evaluate your performance and use the 'submit_findings' tool to report your results. In the taskCompletionPercentage field, honestly assess what percentage of the tasks you successfully completed (0-100). For example, if you completed 2 out of 3 tasks, report 67. If you completed all tasks, report 100. Base this on actual task completion, not just progress through the UI.`;
     }
 
-    const isOvertime = currentProgress !== undefined && currentProgress >= 94
-    const userMessageContent = isOvertime 
+    const isOvertime = currentProgress !== undefined && currentProgress >= 94;
+    const userMessageContent = isOvertime
       ? "TIME IS UP. The test session has ended. Do not click anything else. You MUST call 'submit_findings' immediately to report your results."
-      : "Here is the current screen"
+      : "Here is the current screen";
 
-    const messages: any[] = [
+    // OpenAI message types
+    type OpenAIMessage =
+      | { role: "system"; content: string }
+      | {
+          role: "user";
+          content:
+            | string
+            | Array<{ type: "text" | "image_url"; text?: string; image_url?: { url: string } }>;
+        }
+      | { role: "assistant"; content?: string | null; tool_calls?: unknown[] }
+      | { role: "tool"; tool_call_id: string; content: string };
+
+    const messages: OpenAIMessage[] = [
       {
         role: "system",
         content: systemPrompt,
       },
-      ...(history || []).filter((h: any) => h !== null && h !== undefined),
+      ...(history || []).filter(
+        (h: OpenAIMessage | null | undefined): h is OpenAIMessage => h !== null && h !== undefined
+      ),
       {
         role: "user",
         content: [
@@ -66,13 +81,15 @@ export async function POST(req: Request) {
           },
         ],
       },
-    ]
+    ];
 
-    console.log("[OpenAI] Making API call to gpt-4.1 with", messages.length, "messages")
-    
+    // Use configured OpenAI model
+    const model = env.openai.model;
+    console.log(`[OpenAI] Making API call to ${model} with`, messages.length, "messages");
+
     const response = await openai.chat.completions.create({
-      model: "gpt-4.1",
-      messages,
+      model: model,
+      messages: messages as Parameters<typeof openai.chat.completions.create>[0]["messages"],
       tools: [
         {
           type: "function",
@@ -92,7 +109,8 @@ export async function POST(req: Request) {
                 },
                 rationale: {
                   type: "string",
-                  description: "A brief explanation of why you are clicking here and what you expect to happen",
+                  description:
+                    "A brief explanation of why you are clicking here and what you expect to happen",
                 },
               },
               required: ["x", "y", "rationale"],
@@ -121,22 +139,50 @@ export async function POST(req: Request) {
               properties: {
                 taskCompletionPercentage: {
                   type: "number",
-                  description: "Percentage of tasks successfully completed (0-100). Honestly assess based on actual task completion."
+                  description:
+                    "Percentage of tasks successfully completed (0-100). Honestly assess based on actual task completion.",
                 },
                 findings: {
                   type: "array",
                   items: {
                     type: "object",
                     properties: {
-                      title: { type: "string", description: "Short title of the finding" },
-                      severity: { type: "string", enum: ["High", "Med", "Low"], description: "Severity of the issue" },
-                      confidence: { type: "number", description: "Confidence score 0-100" },
-                      description: { type: "string", description: "Detailed description of the issue" },
-                      suggestedFix: { type: "string", description: "Suggested fix for the issue" },
-                      affectingTasks: { type: "array", items: { type: "string" }, description: "List of tasks affected" },
+                      title: {
+                        type: "string",
+                        description: "Short title of the finding",
+                      },
+                      severity: {
+                        type: "string",
+                        enum: ["High", "Med", "Low"],
+                        description: "Severity of the issue",
+                      },
+                      confidence: {
+                        type: "number",
+                        description: "Confidence score 0-100",
+                      },
+                      description: {
+                        type: "string",
+                        description: "Detailed description of the issue",
+                      },
+                      suggestedFix: {
+                        type: "string",
+                        description: "Suggested fix for the issue",
+                      },
+                      affectingTasks: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "List of tasks affected",
+                      },
                     },
-                    required: ["title", "severity", "confidence", "description", "suggestedFix", "affectingTasks"]
-                  }
+                    required: [
+                      "title",
+                      "severity",
+                      "confidence",
+                      "description",
+                      "suggestedFix",
+                      "affectingTasks",
+                    ],
+                  },
                 },
                 nextSteps: {
                   type: "object",
@@ -145,52 +191,56 @@ export async function POST(req: Request) {
                     userExperience: {
                       type: "array",
                       items: { type: "string" },
-                      description: "User experience improvements (e.g., loading states, visual feedback, animations)"
+                      description:
+                        "User experience improvements (e.g., loading states, visual feedback, animations)",
                     },
                     informationArchitecture: {
                       type: "array",
                       items: { type: "string" },
-                      description: "Information architecture improvements (e.g., navigation, content organization, labeling)"
+                      description:
+                        "Information architecture improvements (e.g., navigation, content organization, labeling)",
                     },
                     accessibility: {
                       type: "array",
                       items: { type: "string" },
-                      description: "Accessibility improvements (e.g., keyboard navigation, screen reader support, color contrast)"
-                    }
+                      description:
+                        "Accessibility improvements (e.g., keyboard navigation, screen reader support, color contrast)",
+                    },
                   },
-                  required: ["userExperience", "informationArchitecture", "accessibility"]
+                  required: ["userExperience", "informationArchitecture", "accessibility"],
                 },
                 generalFeedback: {
                   type: "string",
-                  description: "Overall feedback and summary of the session"
-                }
+                  description: "Overall feedback and summary of the session",
+                },
               },
-              required: ["taskCompletionPercentage", "findings", "nextSteps", "generalFeedback"]
-            }
-          }
-        }
+              required: ["taskCompletionPercentage", "findings", "nextSteps", "generalFeedback"],
+            },
+          },
+        },
       ],
       tool_choice: "auto",
-    })
+    });
 
-    const choice = response.choices[0]
-    const toolCalls = choice.message.tool_calls
+    const choice = response.choices[0];
+    const toolCalls = choice.message.tool_calls;
 
     if (toolCalls && toolCalls.length > 0) {
       return NextResponse.json({
         action: "tool_call",
         tool_calls: toolCalls,
         message: choice.message,
-      })
+      });
     }
 
     return NextResponse.json({
       action: "message",
       content: choice.message.content,
       message: choice.message,
-    })
-  } catch (error: any) {
-    console.error("Agent error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    });
+  } catch (error) {
+    console.error("Agent error:", error);
+    const message = error instanceof Error ? error.message : "Internal server error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

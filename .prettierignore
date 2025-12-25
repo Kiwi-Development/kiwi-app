@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+build
+coverage
+*.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+venv
+__pycache__
+*.pyc
+.env*
+

@@ -1,39 +1,52 @@
-"use client"
+"use client";
 
-import { AppLayout } from "../../../components/app-layout"
-import { Button } from "../../../components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card"
-import { Switch } from "../../../components/ui/switch"
-import { Label } from "../../../components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
-import { useToast } from "../../../../hooks/use-toast"
-import { CheckCircle2, LinkIcon } from "lucide-react"
-import { useState } from "react"
+import { AppLayout } from "../../../components/app-layout";
+import { Button } from "../../../components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../../components/ui/card";
+import { Switch } from "../../../components/ui/switch";
+import { Label } from "../../../components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../components/ui/select";
+import { useToast } from "../../../../hooks/use-toast";
+import { CheckCircle2, LinkIcon } from "lucide-react";
+import { useState } from "react";
 
 export default function SettingsPage() {
-  const [figmaConnected, setFigmaConnected] = useState(true)
-  const [slackConnected, setSlackConnected] = useState(false)
-  const [linearConnected, setLinearConnected] = useState(false)
-  const [autoValidate, setAutoValidate] = useState(true)
-  const [piiRedaction, setPiiRedaction] = useState(true)
-  const { toast } = useToast()
+  const [figmaConnected, setFigmaConnected] = useState(true);
+  const [slackConnected, setSlackConnected] = useState(false);
+  const [linearConnected, setLinearConnected] = useState(false);
+  const [autoValidate, setAutoValidate] = useState(true);
+  const [piiRedaction, setPiiRedaction] = useState(true);
+  const { toast } = useToast();
 
   const handleConnect = (service: string) => {
     toast({
       title: `${service} connected`,
       description: `Successfully connected to ${service}`,
-    })
-    if (service === "Slack") setSlackConnected(true)
-    if (service === "Linear") setLinearConnected(true)
-  }
+    });
+    if (service === "Slack") setSlackConnected(true);
+    if (service === "Linear") setLinearConnected(true);
+  };
 
   return (
     <AppLayout>
-
       <main className="container mx-auto p-6 max-w-4xl space-y-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground mt-2">Manage your integrations, policies, and preferences</p>
+          <p className="text-muted-foreground mt-2">
+            Manage your integrations, policies, and preferences
+          </p>
         </div>
 
         <div className="space-y-6">
@@ -118,7 +131,11 @@ export default function SettingsPage() {
                     Automatically validate high-severity findings with human micro-tests
                   </p>
                 </div>
-                <Switch id="autoValidate" checked={autoValidate} onCheckedChange={setAutoValidate} />
+                <Switch
+                  id="autoValidate"
+                  checked={autoValidate}
+                  onCheckedChange={setAutoValidate}
+                />
               </div>
             </CardContent>
           </Card>
@@ -136,7 +153,11 @@ export default function SettingsPage() {
                     Automatically redact personal information from test results
                   </p>
                 </div>
-                <Switch id="piiRedaction" checked={piiRedaction} onCheckedChange={setPiiRedaction} />
+                <Switch
+                  id="piiRedaction"
+                  checked={piiRedaction}
+                  onCheckedChange={setPiiRedaction}
+                />
               </div>
 
               <div className="space-y-2">
@@ -157,7 +178,9 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label htmlFor="training">Training Opt-in</Label>
-                  <p className="text-sm text-muted-foreground">Allow anonymous data to improve AI models</p>
+                  <p className="text-sm text-muted-foreground">
+                    Allow anonymous data to improve AI models
+                  </p>
                 </div>
                 <Switch id="training" defaultChecked={false} />
               </div>
@@ -166,5 +189,5 @@ export default function SettingsPage() {
         </div>
       </main>
     </AppLayout>
-  )
+  );
 }
