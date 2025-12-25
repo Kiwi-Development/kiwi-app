@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 🥝 Kiwi Backend Server
-# Start the Flask backend server with Playwright browser automation
+# Start the FastAPI backend server with Playwright browser automation
 
 cd "$(dirname "$0")/../backend" || exit 1
 
@@ -36,7 +36,7 @@ fi
 source venv/bin/activate
 
 # Check if dependencies are installed
-if ! python -c "import flask" 2>/dev/null; then
+if ! python -c "import fastapi" 2>/dev/null; then
     echo -e "${YELLOW}⚠ Dependencies not installed. Installing...${NC}"
     echo ""
     pip install -r requirements.txt
@@ -50,7 +50,7 @@ echo -e "${GREEN}✓ Virtual environment activated${NC}"
 echo -e "${GREEN}✓ Dependencies verified${NC}"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo -e "${BLUE}Starting Flask server on http://localhost:5001${NC}"
+echo -e "${BLUE}Starting FastAPI server on http://localhost:5001${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 

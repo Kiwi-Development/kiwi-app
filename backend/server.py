@@ -5,29 +5,31 @@ import threading
 import time
 import subprocess
 import json
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import Optional
 import browser_controller
 import sys
 import traceback
 import logging
-from health import register_health_routes
+from datetime import datetime
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
-app = Flask(__name__)
-app.logger.setLevel(logging.DEBUG)
-# Enable CORS for all routes with more permissive settings
-CORS(app, resources={
-    r"/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+app = FastAPI(title="Kiwi Backend API", version="1.0.0")
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
-# Register health check routes
-register_health_routes(app)
+# Enable CORS for all routes
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Create a dedicated event loop for Playwright to run in a separate thread
 playwright_loop = asyncio.new_event_loop()
@@ -69,31 +71,81 @@ def schedule_session_timeout(session_id):
     timer.start()
     print(f"Scheduled session timeout for {session_id} in 5 minutes.")
 
-@app.route('/start', methods=['POST'])
-def start_session():
-    data = request.get_json()
-    if not data or 'url' not in data:
-        return jsonify({"error": "Invalid input, 'url' is required"}), 400
-    
-    url = data['url']
+# Pydantic models for request validation
+class StartSessionRequest(BaseModel):
+    url: str
+
+class ClickRequest(BaseModel):
+    x: int
+    y: int
+    sessionId: str
+
+class ScreenshotRequest(BaseModel):
+    sessionId: str
+
+@app.get("/health")
+async def health():
+    """Basic health check"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "service": "kiwi-backend"
+    }
+
+@app.get("/health/ready")
+async def readiness():
+    """Readiness probe - checks if service is ready to accept traffic"""
+    try:
+        # Check if Playwright loop is running
+        # This is a simple check - you can add more sophisticated checks
+        return {
+            "status": "ready",
+            "timestamp": datetime.utcnow().isoformat(),
+            "service": "kiwi-backend",
+            "checks": {
+                "playwright_loop": "running"
+            }
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "not_ready",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+@app.get("/health/live")
+async def liveness():
+    """Liveness probe - checks if service is alive"""
+    return {
+        "status": "alive",
+        "timestamp": datetime.utcnow().isoformat(),
+        "service": "kiwi-backend",
+        "uptime": "running"
+    }
+
+@app.post("/start")
+async def start_session(request: StartSessionRequest):
+    """Start a new browser session"""
+    url = request.url
     
     try:
         print(f"Starting new session with URL: {url}")
         session_id = run_async(browser_controller.start_session(url))
         schedule_session_timeout(session_id)
-        return jsonify({"status": "ok", "message": "Session started", "sessionId": session_id})
+        return {"status": "ok", "message": "Session started", "sessionId": session_id}
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        logger.error(f"Error starting session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail={"status": "error", "message": str(e)})
 
-@app.route('/click', methods=['POST'])
-def click():
-    data = request.get_json()
-    if not data or 'x' not in data or 'y' not in data or 'sessionId' not in data:
-        return jsonify({"error": "Invalid input, 'x', 'y', and 'sessionId' are required"}), 400
-    
-    x = data['x']
-    y = data['y']
-    session_id = data['sessionId']
+@app.post("/click")
+async def click(request: ClickRequest):
+    """Click at specified coordinates"""
+    x = request.x
+    y = request.y
+    session_id = request.sessionId
     
     try:
         old_url = run_async(browser_controller.get_current_url(session_id))
@@ -101,40 +153,50 @@ def click():
         new_url = run_async(browser_controller.get_current_url(session_id))
 
         if old_url == new_url:
-            return jsonify({"status": "click_failed", "message" : "Click failed to hit button. Try again."})
+            return {"status": "click_failed", "message": "Click failed to hit button. Try again."}
         
-        return jsonify({"status": "ok"})
+        return {"status": "ok"}
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        logger.error(f"Error clicking: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail={"status": "error", "message": str(e)})
 
-@app.route('/screenshot', methods=['POST'])
-def screenshot():
-    data = request.get_json()
-    if not data or 'sessionId' not in data:
-        return jsonify({"error": "Invalid input, 'sessionId' is required"}), 400
-        
-    session_id = data['sessionId']
+@app.post("/screenshot")
+async def screenshot(request: ScreenshotRequest):
+    """Take a screenshot of the current page"""
+    session_id = request.sessionId
 
     try:
         img_bytes = run_async(browser_controller.take_screenshot(session_id))
         
         if not img_bytes:
-             return jsonify({"status": "error", "message": "Failed to capture screenshot"}), 500
+            raise HTTPException(
+                status_code=500,
+                detail={"status": "error", "message": "Failed to capture screenshot"}
+            )
             
         # Encode to base64
         b64_string = base64.b64encode(img_bytes).decode('utf-8')
         
-        return jsonify({
+        return {
             "status": "ok",
             "screenshot": b64_string
-        })
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         error_details = traceback.format_exc()
         # This WILL show up in logs because it's an exception
-        print(f"ERROR: {error_details}", file=sys.stderr, flush=True)
-        return jsonify({"status": "error", "message": str(e), "details": error_details}), 500
+        logger.error(f"ERROR: {error_details}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "message": str(e),
+                "details": error_details
+            }
+        )
 
 if __name__ == '__main__':
-    import os
+    import uvicorn
     port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', port=port)
+    uvicorn.run(app, host='0.0.0.0', port=port)

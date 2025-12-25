@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────┐         HTTP/REST         ┌──────────────────┐
-│   Next.js App   │ ────────────────────────> │  Flask Backend   │
+│   Next.js App   │ ────────────────────────> │  FastAPI Backend │
 │   (Frontend)    │ <──────────────────────── │  (Playwright)    │
 │   Port 3000     │         Screenshots       │   Port 5001      │
 └─────────────────┘                           └──────────────────┘
@@ -27,12 +27,12 @@
 - **Storage**: localStorage (tests, personas, runs)
 - **Auth**: Supabase
 
-### Backend (Flask + Playwright)
+### Backend (FastAPI + Playwright)
 
 - **Location**: `/backend`
 - **Port**: 5001 (dev)
 - **Purpose**: Browser automation, screenshot capture, click simulation
-- **Tech**: Flask, Playwright (Chromium)
+- **Tech**: FastAPI, Playwright (Chromium)
 
 ### External Services
 
@@ -44,8 +44,8 @@
 
 1. User creates a test → stored in localStorage
 2. User starts a test run → Frontend calls OpenAI API
-3. OpenAI agent requests screenshots → Frontend calls Flask backend
-4. Flask backend uses Playwright to:
+3. OpenAI agent requests screenshots → Frontend calls FastAPI backend
+4. FastAPI backend uses Playwright to:
    - Navigate to URL
    - Take screenshots
    - Simulate clicks

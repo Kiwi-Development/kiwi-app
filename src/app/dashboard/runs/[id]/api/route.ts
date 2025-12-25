@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     }
 
     // Build base system prompt
-    let systemPrompt = `You are a helpful assistant that will simulate UI/UX usability testing. You will be given two functions that link to a Flask API endpoint for clicking and receiving a screenshot of the screen. Using those two tools, you will attempt to complete the tasks given to you by navigating the Figma UI via those two endpoints. Your goal is to complete the following tasks on the provided UI:
+    let systemPrompt = `You are a helpful assistant that will simulate UI/UX usability testing. You will be given two functions that link to a FastAPI backend endpoint for clicking and receiving a screenshot of the screen. Using those two tools, you will attempt to complete the tasks given to you by navigating the Figma UI via those two endpoints. Your goal is to complete the following tasks on the provided UI:
       ${tasks.map((t: string, i: number) => `${i + 1}. ${t}`).join("\n")}
 
       You are simulating the following persona:

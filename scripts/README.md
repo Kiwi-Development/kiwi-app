@@ -45,7 +45,7 @@ scripts\start-all.bat
 - Activates Python virtual environment
 - Checks for dependencies
 - Installs dependencies if missing
-- Starts Flask server on port 5001
+- Starts FastAPI server on port 5001
 
 ### `start-frontend.sh`
 

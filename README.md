@@ -2,7 +2,7 @@
 
 Kiwi is an AI-powered usability testing platform that automates user testing by simulating personas and analyzing UI/UX interactions. The platform uses AI agents to navigate prototypes, capture screenshots, and provide detailed usability feedback.
 
-Built with Next.js, Flask, Playwright, and OpenAI.
+Built with Next.js, FastAPI, Playwright, and OpenAI.
 
 ## Prerequisites
 
@@ -127,7 +127,7 @@ python server.py
 ## Project Structure
 
 - `/src` - Next.js frontend application
-- `/backend` - Python Flask server with Playwright browser automation
+- `/backend` - Python FastAPI server with Playwright browser automation
 - `/public` - Static assets
 - `/docs` - Project documentation
 
@@ -165,7 +165,7 @@ See [scripts/README.md](./scripts/README.md) for more details on the helper scri
 
 - Ensure the backend server is running on port 5001
 - Check that `NEXT_PUBLIC_EC2_IP` and `NEXT_PUBLIC_BACKEND_PORT` are set correctly
-- Verify CORS is enabled in the Flask backend
+- Verify CORS is enabled in the FastAPI backend
 
 ### OpenAI API Issues
 

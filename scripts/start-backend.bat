@@ -1,6 +1,6 @@
 @echo off
 REM 🥝 Kiwi Backend Server
-REM Start the Flask backend server with Playwright browser automation
+REM Start the FastAPI backend server with Playwright browser automation
 
 cd /d "%~dp0\..\backend"
 
@@ -29,7 +29,7 @@ REM Activate virtual environment
 call venv\Scripts\activate.bat
 
 REM Check if dependencies are installed
-python -c "import flask" 2>nul
+python -c "import fastapi" 2>nul
 if errorlevel 1 (
     echo [WARNING] Dependencies not installed. Installing...
     echo.
@@ -44,7 +44,7 @@ echo [OK] Virtual environment activated
 echo [OK] Dependencies verified
 echo.
 echo ════════════════════════════════════════════════════════════════════════════════
-echo Starting Flask server on http://localhost:5001
+echo Starting FastAPI server on http://localhost:5001
 echo ════════════════════════════════════════════════════════════════════════════════
 echo.
 
