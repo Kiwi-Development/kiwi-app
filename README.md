@@ -110,7 +110,7 @@ python server.py
      - **Name**: `kiwi-backend`
      - **Root Directory**: `backend`
      - **Environment**: Python 3
-     - **Build Command**: `pip install -r requirements.txt && playwright install chromium`
+     - **Build Command**: `pip install -r requirements.txt && playwright install-deps chromium && playwright install chromium`
      - **Start Command**: `python server.py`
      - **Health Check Path**: `/health`
 
