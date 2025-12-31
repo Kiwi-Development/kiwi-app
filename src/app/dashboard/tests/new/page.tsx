@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppLayout } from "../../../../components/app-layout";
 import { StepIndicator } from "../../../../components/test-wizard/step-indicator";
 import { Button } from "../../../../components/ui/button";
@@ -16,10 +17,17 @@ import { Label } from "../../../../components/ui/label";
 import { Textarea } from "../../../../components/ui/textarea";
 import { Badge } from "../../../../components/ui/badge";
 import { Checkbox } from "../../../../components/ui/checkbox";
-import { useToast } from "../../../../../hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../../components/ui/select";
+import { useToast } from "../../../../hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, GripVertical, Plus, Trash2 } from "lucide-react";
-import { testStore } from "../../../../lib/test-store";
+import { testStore, type Test } from "../../../../lib/test-store";
 import {
   Dialog,
   DialogContent,
@@ -31,9 +39,14 @@ import {
 import { personaStore, type Persona } from "../../../../lib/persona-store";
 
 export default function NewTestPage() {
+  const searchParams = useSearchParams();
+  const testId = searchParams.get("id");
+  const [isEditing, setIsEditing] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [testName, setTestName] = useState("");
   const [goal, setGoal] = useState("");
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [loadingPersonas, setLoadingPersonas] = useState(true);
 
   const [useCase, setUseCase] = useState("");
   const [mutation, setMutation] = useState([2]);
@@ -64,7 +77,73 @@ export default function NewTestPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [selectedPersona, setSelectedPersona] = useState<string>("");
+  const [runCount, setRunCount] = useState(1);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
+
+  // Load personas
+  useEffect(() => {
+    const loadPersonas = async () => {
+      setLoadingPersonas(true);
+      try {
+        const loadedPersonas = await personaStore.getPersonas();
+        setPersonas(loadedPersonas);
+        console.log("Loaded personas:", loadedPersonas);
+      } catch (error) {
+        console.error("Error loading personas:", error);
+      } finally {
+        setLoadingPersonas(false);
+      }
+    };
+    loadPersonas();
+  }, []);
+
+  // Load test data if editing
+  useEffect(() => {
+    const loadTestData = async () => {
+      if (testId) {
+        setIsEditing(true);
+        try {
+          const test = await testStore.getTestById(testId);
+          if (test) {
+            setTestName(test.title);
+            setGoal(test.testData?.goal || "");
+            setUseCase(test.testData?.useCase || "");
+            setSelectedPersona(test.testData?.selectedPersona || "");
+            setRunCount((test.testData as any)?.runCount || 1);
+            setTasks(test.testData?.tasks || []);
+            setFigmaUrl(test.testData?.figmaUrlA || "");
+            setLiveUrl(test.testData?.liveUrl || "");
+            setPrototypeType(
+              test.artifactType === "Figma"
+                ? "figma"
+                : test.artifactType === "Live URL"
+                  ? "live"
+                  : ""
+            );
+            if (test.heuristics) {
+              setHeuristics({
+                visibility: test.heuristics.visibility ?? true,
+                realWorld: test.heuristics.realWorld ?? true,
+                userControl: test.heuristics.userControl ?? true,
+                errorPrevention: test.heuristics.errorPrevention ?? true,
+                recognition: test.heuristics.recognition ?? true,
+                consistency: test.heuristics.consistency ?? true,
+                a11y: test.heuristics.a11y ?? true,
+              });
+            }
+          }
+        } catch (error) {
+          console.error("Error loading test data:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load test data",
+            variant: "destructive",
+          });
+        }
+      }
+    };
+    loadTestData();
+  }, [testId, toast]);
 
   // Task management state
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
@@ -205,7 +284,58 @@ export default function NewTestPage() {
     setDraggedTaskIndex(null);
   };
 
-  const handleRunSimulation = () => {
+  const handleSaveDraft = async () => {
+    if (!testName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a test name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const persona = personas.find((p) => p.id === selectedPersona);
+    const testToSave = {
+      id: testId || "", // Use existing ID if editing, otherwise will be generated
+      title: testName,
+      status: "draft" as const,
+      lastRun: "Never",
+      personas: persona ? [`${persona.name} / ${persona.role}`] : [],
+      artifactType: prototypeType === "figma" ? "Figma" : "Live URL",
+      createdAt: Date.now(),
+      testData: {
+        testName,
+        goal,
+        selectedPersona,
+        runCount,
+        useCase,
+        tasks,
+        figmaUrlA: figmaUrl,
+        liveUrl,
+      },
+      heuristics,
+    };
+
+    const savedTest = await testStore.saveTest(testToSave);
+    if (!savedTest) {
+      toast({
+        title: "Error",
+        description: "Failed to save draft",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: isEditing ? "Draft updated" : "Draft saved",
+      description: isEditing ? "Your test has been updated" : "Your test has been saved as a draft",
+    });
+
+    // Navigate to tests page to see the saved draft
+    router.push("/dashboard/tests");
+  };
+
+  const handleRunSimulation = async () => {
     //   if (selectedPersonas.length === 0) {
     //     toast({
     //       title: "Error",
@@ -228,37 +358,43 @@ export default function NewTestPage() {
     //     return
     //   }
 
+    const persona = personas.find((p) => p.id === selectedPersona);
     const newTest = {
-      id: Date.now().toString(),
+      id: testId || "", // Use existing ID if editing, otherwise will be generated
       title: testName,
       status: "running" as const,
       lastRun: "Just now",
-      personas: selectedPersona
-        ? (() => {
-            const persona = personaStore.getPersonas().find((p) => p.id === selectedPersona);
-            return persona ? [`${persona.name} / ${persona.role}`] : [];
-          })()
-        : [],
+      personas: persona ? [`${persona.name} / ${persona.role}`] : [],
       artifactType: prototypeType === "figma" ? "Figma" : "Live URL",
       createdAt: Date.now(),
       testData: {
         testName,
         goal,
         selectedPersona,
+        runCount,
         useCase,
         tasks,
         figmaUrlA: figmaUrl,
         liveUrl,
       },
+      heuristics,
     };
 
-    testStore.saveTest(newTest);
+    const savedTest = await testStore.saveTest(newTest);
+    if (!savedTest) {
+      toast({
+        title: "Error",
+        description: "Failed to save test",
+        variant: "destructive",
+      });
+      return;
+    }
 
     toast({
       title: "Simulation started",
       description: "Running test with 3 persona variants",
     });
-    router.push(`/dashboard/runs/${newTest.id}`);
+    router.push(`/dashboard/runs/${savedTest.id}`);
   };
 
   const getMutationDescription = (level: number) => {
@@ -323,33 +459,43 @@ export default function NewTestPage() {
                   <div
                     className={`space-y-2 ${errors.selectedPersona ? "border border-red-500 rounded-lg p-2" : ""}`}
                   >
-                    {personaStore.getPersonas().map((persona) => (
-                      <div
-                        key={persona.id}
-                        className={`flex items-center space-x-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                          selectedPersona === persona.id
-                            ? "bg-primary/10 border-primary"
-                            : "hover:bg-accent/50"
-                        }`}
-                        onClick={() => selectPersona(persona.id)}
-                      >
+                    {loadingPersonas ? (
+                      <div className="text-sm text-muted-foreground py-4 text-center">
+                        Loading personas...
+                      </div>
+                    ) : personas.length === 0 ? (
+                      <div className="text-sm text-muted-foreground py-4 text-center border rounded-lg p-4">
+                        No personas available. Create one first.
+                      </div>
+                    ) : (
+                      personas.map((persona) => (
                         <div
-                          className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
-                            selectedPersona === persona.id ? "border-primary" : "border-input"
+                          key={persona.id}
+                          className={`flex items-center space-x-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                            selectedPersona === persona.id
+                              ? "bg-primary/10 border-primary"
+                              : "hover:bg-accent/50"
                           }`}
+                          onClick={() => selectPersona(persona.id)}
                         >
-                          {selectedPersona === persona.id && (
-                            <div className="h-3 w-3 rounded-full bg-primary" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-medium">{persona.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {persona.role} • {persona.tags.join(" • ")}
+                          <div
+                            className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
+                              selectedPersona === persona.id ? "border-primary" : "border-input"
+                            }`}
+                          >
+                            {selectedPersona === persona.id && (
+                              <div className="h-3 w-3 rounded-full bg-primary" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-medium">{persona.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {persona.role} • {persona.tags.join(" • ")}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                   <Button
                     variant="outline"
@@ -361,6 +507,28 @@ export default function NewTestPage() {
                     New Persona
                   </Button>
                 </div>
+
+                {selectedPersona && (
+                  <div className="space-y-2">
+                    <Label>Number of runs</Label>
+                    <Select
+                      value={runCount.toString()}
+                      onValueChange={(v) => setRunCount(parseInt(v))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1 run</SelectItem>
+                        <SelectItem value="2">2 runs</SelectItem>
+                        <SelectItem value="3">3 runs</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Each run will be different as the agent behavior varies
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="useCase">Use Case *</Label>
@@ -498,7 +666,7 @@ export default function NewTestPage() {
                       Cancel
                     </Button>
                     <Button
-                      onClick={() => {
+                      onClick={async () => {
                         if (!newPersonaName || !newPersonaRole) {
                           toast({
                             title: "Error",
@@ -508,7 +676,7 @@ export default function NewTestPage() {
                           return;
                         }
 
-                        const newPersona = personaStore.addPersona({
+                        const newPersona = await personaStore.addPersona({
                           name: newPersonaName,
                           role: newPersonaRole,
                           tags: newPersonaTags,
@@ -519,16 +687,30 @@ export default function NewTestPage() {
                           accessibility: newPersonaAccessibility.split("\n").filter(Boolean),
                         });
 
-                        setSelectedPersona(newPersona.id);
-                        setPersonaDialogOpen(false);
-                        setNewPersonaName("");
-                        setNewPersonaRole("");
-                        setNewPersonaTags([]);
-                        setNewPersonaGoals("");
-                        setNewPersonaBehaviors("");
-                        setNewPersonaFrustrations("");
-                        setNewPersonaConstraints("");
-                        setNewPersonaAccessibility("");
+                        if (newPersona) {
+                          const allPersonas = await personaStore.getPersonas();
+                          setPersonas(allPersonas);
+                          setSelectedPersona(newPersona.id);
+                          setPersonaDialogOpen(false);
+                          setNewPersonaName("");
+                          setNewPersonaRole("");
+                          setNewPersonaTags([]);
+                          setNewPersonaGoals("");
+                          setNewPersonaBehaviors("");
+                          setNewPersonaFrustrations("");
+                          setNewPersonaConstraints("");
+                          setNewPersonaAccessibility("");
+                          toast({
+                            title: "Persona created",
+                            description: `${newPersonaName} has been added`,
+                          });
+                        } else {
+                          toast({
+                            title: "Error",
+                            description: "Failed to create persona",
+                            variant: "destructive",
+                          });
+                        }
                       }}
                     >
                       Create Persona
@@ -834,9 +1016,7 @@ export default function NewTestPage() {
                     <div className="flex flex-wrap gap-2">
                       {selectedPersona ? (
                         (() => {
-                          const persona = personaStore
-                            .getPersonas()
-                            .find((p) => p.id === selectedPersona);
+                          const persona = personas.find((p) => p.id === selectedPersona);
                           return persona ? (
                             <Badge key={persona.id} variant="secondary">
                               {persona.name} / {persona.role}
@@ -911,7 +1091,7 @@ export default function NewTestPage() {
                 <Button onClick={handleRunSimulation} size="lg" className="flex-1">
                   Run Simulation
                 </Button>
-                <Button variant="outline" size="lg">
+                <Button variant="outline" size="lg" onClick={handleSaveDraft}>
                   Save Draft
                 </Button>
               </div>

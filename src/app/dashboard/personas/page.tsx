@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "../../../components/ui/table";
 import { Badge } from "../../../components/ui/badge";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Users } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { Textarea } from "../../../components/ui/textarea";
 import { Label } from "../../../components/ui/label";
@@ -25,7 +25,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../../../components/ui/dialog";
-import { useToast } from "../../../../hooks/use-toast";
+import { useToast } from "../../../hooks/use-toast";
 import { personaStore, type Persona } from "../../../lib/persona-store";
 
 export default function PersonasPage() {
@@ -43,10 +43,11 @@ export default function PersonasPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const storedPersonas = personaStore.getPersonas();
-    // Initialize state from store - this is acceptable for one-time initialization
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPersonas(storedPersonas);
+    const loadPersonas = async () => {
+      const storedPersonas = await personaStore.getPersonas();
+      setPersonas(storedPersonas);
+    };
+    loadPersonas();
   }, []);
 
   const availableTags = [
@@ -60,7 +61,7 @@ export default function PersonasPage() {
     "Non-native English",
   ];
 
-  const handleSavePersona = () => {
+  const handleSavePersona = async () => {
     if (!newPersonaName || !newPersonaRole) {
       toast({
         title: "Error",
@@ -71,7 +72,7 @@ export default function PersonasPage() {
     }
 
     if (editingPersona) {
-      const updated = personaStore.updatePersona(editingPersona.id, {
+      const updated = await personaStore.updatePersona(editingPersona.id, {
         name: newPersonaName,
         role: newPersonaRole,
         tags: newPersonaTags,
@@ -81,13 +82,22 @@ export default function PersonasPage() {
         constraints: newPersonaConstraints.split("\n").filter(Boolean),
         accessibility: newPersonaAccessibility.split("\n").filter(Boolean),
       });
-      setPersonas(personaStore.getPersonas());
-      toast({
-        title: "Persona updated",
-        description: `${newPersonaName} has been updated`,
-      });
+      if (updated) {
+        const allPersonas = await personaStore.getPersonas();
+        setPersonas(allPersonas);
+        toast({
+          title: "Persona updated",
+          description: `${newPersonaName} has been updated`,
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to update persona",
+          variant: "destructive",
+        });
+      }
     } else {
-      const newPersona = personaStore.addPersona({
+      const newPersona = await personaStore.addPersona({
         name: newPersonaName,
         role: newPersonaRole,
         tags: newPersonaTags,
@@ -97,26 +107,32 @@ export default function PersonasPage() {
         constraints: newPersonaConstraints.split("\n").filter(Boolean),
         accessibility: newPersonaAccessibility.split("\n").filter(Boolean),
       });
-      setPersonas([...personas, newPersona]);
-      toast({
-        title: "Persona created",
-        description: `${newPersonaName} has been added to your personas`,
-      });
+      if (newPersona) {
+        const allPersonas = await personaStore.getPersonas();
+        setPersonas(allPersonas);
+        toast({
+          title: "Persona created",
+          description: `${newPersonaName} has been added to your personas`,
+        });
+        // Reset form only on success
+        setPersonaDialogOpen(false);
+        setNewPersonaName("");
+        setNewPersonaRole("");
+        setNewPersonaTags([]);
+        setNewPersonaGoals("");
+        setNewPersonaBehaviors("");
+        setNewPersonaFrustrations("");
+        setNewPersonaConstraints("");
+        setNewPersonaAccessibility("");
+        setEditingPersona(null);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to create persona. Check console for details.",
+          variant: "destructive",
+        });
+      }
     }
-
-    // Reset form
-    setPersonaDialogOpen(false);
-    setNewPersonaName("");
-    setNewPersonaRole("");
-    setNewPersonaTags([]);
-    setNewPersonaGoals("");
-    setNewPersonaBehaviors("");
-    setNewPersonaFrustrations("");
-    setNewPersonaConstraints("");
-    setNewPersonaAccessibility("");
-    setEditingPersona(null);
-
-    setPersonas(personaStore.getPersonas());
   };
 
   const handleEditPersona = (persona: Persona) => {
@@ -282,71 +298,100 @@ export default function PersonasPage() {
             </Dialog>
           </div>
 
-          <Card>
-            <CardContent className="px-6">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Tags</TableHead>
-                    <TableHead className="w-[120px]">Last Used</TableHead>
-                    <TableHead className="pl-4.5 text-left">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {personas.map((persona, index) => (
-                    <TableRow key={index} className="group">
-                      <TableCell className="font-medium">{persona.name}</TableCell>
-                      <TableCell>{persona.role}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-2">
-                          {persona.tags.map((tag) => (
-                            <Badge key={tag} variant="outline" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{persona.lastUsed}</TableCell>
-                      <TableCell className="text-left">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditPersona(persona);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              personaStore.deletePersona(persona.id);
-                              setPersonas(personaStore.getPersonas());
-                              toast({
-                                title: "Persona deleted",
-                                description: `${persona.name} has been removed`,
-                              });
-                            }}
-                            aria-label="Delete persona"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
+          {personas.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent className="space-y-4">
+                <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                  <Users className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold">No personas yet</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    Create your first persona to start testing with different user perspectives
+                  </p>
+                </div>
+                <Button size="lg" className="mt-4" onClick={() => setPersonaDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Persona
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="px-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Tags</TableHead>
+                      <TableHead className="w-[120px]">Last Used</TableHead>
+                      <TableHead className="pl-4.5 text-left">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {personas.map((persona, index) => (
+                      <TableRow key={index} className="group">
+                        <TableCell className="font-medium">{persona.name}</TableCell>
+                        <TableCell>{persona.role}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-2">
+                            {persona.tags.map((tag) => (
+                              <Badge key={tag} variant="outline" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{persona.lastUsed}</TableCell>
+                        <TableCell className="text-left">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditPersona(persona);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const deleted = await personaStore.deletePersona(persona.id);
+                                if (deleted) {
+                                  const allPersonas = await personaStore.getPersonas();
+                                  setPersonas(allPersonas);
+                                  toast({
+                                    title: "Persona deleted",
+                                    description: `${persona.name} has been deleted`,
+                                  });
+                                } else {
+                                  toast({
+                                    title: "Error",
+                                    description: "Failed to delete persona",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                              aria-label="Delete persona"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
         </main>
       </AppLayout>
     </div>

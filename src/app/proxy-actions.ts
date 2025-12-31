@@ -1,8 +1,6 @@
 "use server";
 
-import { env } from "@/lib/env";
-
-const BASE_URL = `http://${env.backend.ip}:${env.backend.port}`;
+const BASE_URL = `http://${process.env.NEXT_PUBLIC_EC2_IP || "localhost"}:${process.env.NEXT_PUBLIC_BACKEND_PORT || "5001"}`;
 
 // Debug: Log the backend URL being used
 if (typeof window === "undefined") {
@@ -80,6 +78,82 @@ export async function proxyScreenshot(sessionId: string) {
     return {
       status: "error",
       message,
+    };
+  }
+}
+
+export async function extractContext(sessionId: string) {
+  try {
+    const res = await fetch(`${BASE_URL}/extract-context`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      return {
+        status: "error",
+        message: `Failed to extract context: ${res.status}`,
+        context: null,
+      };
+    }
+
+    const data = await res.json();
+    return {
+      status: "ok",
+      context: data.context || null,
+    };
+  } catch (error) {
+    console.error("[Proxy] Extract context error:", error);
+    const message = error instanceof Error ? error.message : "Failed to extract context";
+    return {
+      status: "error",
+      message,
+      context: null,
+    };
+  }
+}
+
+export async function fetchFigmaMetadata(url: string, apiToken?: string) {
+  try {
+    const res = await fetch(`${BASE_URL}/figma-metadata`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, apiToken }),
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      // For public files, this is not an error - we'll use DOM/A11y extraction instead
+      return {
+        status: "ok",
+        metadata: {
+          public: true,
+          metadata_available: false,
+          note: "Figma API token not available. Using DOM/A11y extraction instead.",
+        },
+        enhanced: false,
+      };
+    }
+
+    const data = await res.json();
+    return {
+      status: "ok",
+      metadata: data.metadata || null,
+      enhanced: data.enhanced || false,
+    };
+  } catch (error) {
+    // For public files, this is not a critical error - we'll use DOM/A11y extraction instead
+    console.log("[Proxy] Figma metadata not available, using DOM/A11y extraction instead");
+    return {
+      status: "ok",
+      metadata: {
+        public: true,
+        metadata_available: false,
+        note: "Figma metadata unavailable. Using DOM/A11y extraction instead.",
+      },
+      enhanced: false,
     };
   }
 }

@@ -1,7 +1,6 @@
 import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { env } from "@/lib/env";
 
 const waitlistSchema = z.object({
   email: z.string().email(),
@@ -13,11 +12,11 @@ export async function POST(req: NextRequest) {
     const { email } = waitlistSchema.parse(body);
 
     // Check if Google Sheets is configured
-    if (
-      !env.googleSheets.clientEmail ||
-      !env.googleSheets.privateKey ||
-      !env.googleSheets.spreadsheetId
-    ) {
+    const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
+    const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
+    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+
+    if (!clientEmail || !privateKey || !spreadsheetId) {
       return NextResponse.json(
         { error: "Google Sheets integration not configured" },
         { status: 503 }
@@ -26,8 +25,8 @@ export async function POST(req: NextRequest) {
 
     const auth = new google.auth.GoogleAuth({
       credentials: {
-        client_email: env.googleSheets.clientEmail,
-        private_key: env.googleSheets.privateKey.replace(/\\n/g, "\n"),
+        client_email: clientEmail,
+        private_key: privateKey.replace(/\\n/g, "\n"),
       },
       scopes: [
         "https://www.googleapis.com/auth/drive",
@@ -39,7 +38,7 @@ export async function POST(req: NextRequest) {
     const sheets = google.sheets({ version: "v4", auth });
 
     await sheets.spreadsheets.values.append({
-      spreadsheetId: env.googleSheets.spreadsheetId,
+      spreadsheetId: spreadsheetId,
       range: "A1",
       valueInputOption: "USER_ENTERED",
       requestBody: {

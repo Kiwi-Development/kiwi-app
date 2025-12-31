@@ -32,7 +32,7 @@ export type LiveRunState = {
   title: string;
   status: RunStatus;
   startedAt?: number; // epoch ms
-  etaLabel?: string; // e.g., "~8 min"
+  etaLabel?: string | null; // e.g., "~8 min" or null for first run
   duration?: number; // seconds (use video duration when known)
   personas: PersonaProgress[];
   events: RunEvent[]; // append-only, sorted by `t`

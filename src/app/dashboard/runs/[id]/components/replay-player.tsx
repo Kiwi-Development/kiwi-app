@@ -15,7 +15,7 @@ import {
   Minimize,
 } from "lucide-react";
 import type { RunEvent } from "../model";
-import { useToast } from "../../../../../../hooks/use-toast";
+import { useToast } from "../../../../../hooks/use-toast";
 import { MarkerBar } from "./marker-bar";
 
 interface ReplayPlayerProps {

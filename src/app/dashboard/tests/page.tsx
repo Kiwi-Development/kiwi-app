@@ -14,9 +14,28 @@ import {
 } from "../../../components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs";
 import { Badge } from "../../../components/ui/badge";
+import { Checkbox } from "../../../components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../../components/ui/dropdown-menu";
 import Link from "next/link";
-import { Clock, Users, Target, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Clock,
+  Users,
+  Target,
+  Trash2,
+  MoreVertical,
+  Copy,
+  Play,
+  FileText,
+  GitCompare,
+} from "lucide-react";
 import { testStore, type Test } from "../../../lib/test-store";
+import { supabase } from "../../../lib/supabase";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,21 +46,60 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog";
+import { useToast } from "../../../hooks/use-toast";
 
 export default function TestsPage() {
   const [tests, setTests] = useState<Test[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [testToDelete, setTestToDelete] = useState<string | null>(null);
+  const [runCounts, setRunCounts] = useState<Record<string, number>>({});
+  const [selectedTests, setSelectedTests] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Initialize state from store - this is acceptable for one-time initialization
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTests(testStore.getTests());
+    const loadTests = async () => {
+      const currentTests = await testStore.getTests();
+      setTests(currentTests);
 
-    const interval = setInterval(() => {
-      const currentTests = testStore.getTests();
-      setTests([...currentTests]);
-    }, 1000);
+      // Load run counts for all tests
+      if (currentTests.length > 0) {
+        const testIds = currentTests.map((t) => t.id);
+        const { data: runData } = await supabase
+          .from("test_runs")
+          .select("test_id")
+          .in("test_id", testIds);
+
+        // Count runs per test
+        const counts: Record<string, number> = {};
+        runData?.forEach((run: { test_id: string }) => {
+          counts[run.test_id] = (counts[run.test_id] || 0) + 1;
+        });
+        setRunCounts(counts);
+      }
+    };
+    loadTests();
+
+    const interval = setInterval(async () => {
+      const currentTests = await testStore.getTests();
+      setTests(currentTests);
+
+      // Update run counts
+      if (currentTests.length > 0) {
+        const testIds = currentTests.map((t) => t.id);
+        const { data: runData } = await supabase
+          .from("test_runs")
+          .select("test_id")
+          .in("test_id", testIds);
+
+        const counts: Record<string, number> = {};
+        runData?.forEach((run: { test_id: string }) => {
+          counts[run.test_id] = (counts[run.test_id] || 0) + 1;
+        });
+        setRunCounts(counts);
+      }
+    }, 5000); // Poll every 5 seconds instead of 1 second
 
     return () => clearInterval(interval);
   }, []);
@@ -53,13 +111,91 @@ export default function TestsPage() {
     setDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (testToDelete) {
-      testStore.deleteTest(testToDelete);
-      setTests(testStore.getTests());
+      try {
+        console.log("Attempting to delete test:", testToDelete);
+        const deleted = await testStore.deleteTest(testToDelete);
+        console.log("Delete result:", deleted);
+        if (deleted) {
+          const currentTests = await testStore.getTests();
+          setTests(currentTests);
+          toast({
+            title: "Test deleted",
+            description: "The test has been successfully deleted.",
+          });
+        } else {
+          console.error("Delete returned false - check console for details");
+          toast({
+            title: "Error",
+            description: "Failed to delete the test. Check the browser console for details.",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error("Error deleting test:", error);
+        toast({
+          title: "Error",
+          description: `An error occurred while deleting the test: ${error instanceof Error ? error.message : "Unknown error"}`,
+          variant: "destructive",
+        });
+      }
       setTestToDelete(null);
     }
     setDeleteDialogOpen(false);
+  };
+
+  const handleDuplicate = async (test: Test) => {
+    try {
+      // Preserve all test data including testData and heuristics
+      const duplicatedTest: Test = {
+        ...test,
+        id: "", // New ID will be generated by Supabase
+        title: `${test.title} (Copy)`,
+        status: "draft" as const,
+        lastRun: "Never",
+        createdAt: Date.now(),
+        // Clear run-specific data
+        successRate: undefined,
+        avgTime: undefined,
+        duration: undefined,
+        actionCount: undefined,
+        completedAt: undefined,
+        feedback: undefined,
+        findings: undefined,
+        nextSteps: undefined,
+        progressState: undefined,
+        // Preserve testData and heuristics (spread operator handles this)
+      };
+
+      const savedTest = await testStore.saveTest(duplicatedTest);
+      if (savedTest) {
+        const currentTests = await testStore.getTests();
+        setTests(currentTests);
+        toast({
+          title: "Test duplicated",
+          description: `${savedTest.title} has been created as a draft.`,
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to duplicate the test. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error duplicating test:", error);
+      toast({
+        title: "Error",
+        description: "An error occurred while duplicating the test.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRerun = (test: Test) => {
+    // Navigate to the test run page to start a new run
+    router.push(`/dashboard/runs/${test.id}`);
   };
 
   const calculateSuccessRate = (test: Test): number => {
@@ -95,16 +231,71 @@ export default function TestsPage() {
     if (test.status === "completed") {
       return `/dashboard/reports/${test.id}`;
     }
+    if (test.status === "draft") {
+      return `/dashboard/tests/new?id=${test.id}`;
+    }
     return `/dashboard/runs/${test.id}`;
   };
 
+  const handleTestSelect = (testId: string, checked: boolean) => {
+    setSelectedTests((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(testId);
+      } else {
+        next.delete(testId);
+      }
+      return next;
+    });
+  };
+
+  const handleCompare = () => {
+    if (selectedTests.size === 2) {
+      const [testA, testB] = Array.from(selectedTests);
+      router.push(`/dashboard/tests/compare?testA=${testA}&testB=${testB}`);
+    } else {
+      toast({
+        title: "Select 2 tests",
+        description: "Please select exactly 2 tests to compare.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleSelectionMode = () => {
+    setIsSelectionMode(!isSelectionMode);
+    if (isSelectionMode) {
+      setSelectedTests(new Set());
+    }
+  };
+
   const TestCard = ({ test }: { test: Test }) => (
-    <div className="relative group">
-      <Link href={getTestLink(test)}>
-        <Card className="hover:border-primary transition-colors cursor-pointer">
+    <div className={`relative group ${isSelectionMode ? "flex items-center gap-4" : ""}`}>
+      {isSelectionMode && (
+        <div className="flex items-center justify-center shrink-0">
+          <Checkbox
+            checked={selectedTests.has(test.id)}
+            onCheckedChange={(checked) => handleTestSelect(test.id, checked === true)}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+      <Card
+        className={`hover:border-primary transition-colors ${isSelectionMode ? "flex-1" : "w-full"}`}
+      >
+        <Link
+          href={getTestLink(test)}
+          className="block"
+          onClick={(e) => {
+            if (isSelectionMode) {
+              e.preventDefault();
+              handleTestSelect(test.id, !selectedTests.has(test.id));
+            }
+          }}
+        >
           <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1 flex-1">
                 <CardTitle className="text-xl">{test.title}</CardTitle>
                 <CardDescription className="flex items-center gap-4 mt-2">
                   <span className="flex items-center gap-1.5">
@@ -119,6 +310,12 @@ export default function TestsPage() {
                     <Target className="h-4 w-4" />
                     {test.artifactType}
                   </span>
+                  {runCounts[test.id] !== undefined && runCounts[test.id] > 0 && (
+                    <span className="flex items-center gap-1.5">
+                      <FileText className="h-4 w-4" />
+                      {runCounts[test.id]} result{runCounts[test.id] !== 1 ? "s" : ""}
+                    </span>
+                  )}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -128,15 +325,55 @@ export default function TestsPage() {
                 >
                   {test.status}
                 </Badge>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => handleDeleteClick(e, test.id)}
-                  aria-label="Delete test"
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      aria-label="Test options"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleRerun(test);
+                      }}
+                    >
+                      <Play className="h-4 w-4 mr-2" />
+                      Rerun
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDuplicate(test);
+                      }}
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      Duplicate
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDeleteClick(e, test.id);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </CardHeader>
@@ -163,8 +400,8 @@ export default function TestsPage() {
               </div>
             </div>
           </CardContent>
-        </Card>
-      </Link>
+        </Link>
+      </Card>
     </div>
   );
 
@@ -182,6 +419,29 @@ export default function TestsPage() {
                 New Test
               </Button>
             </Link>
+          </div>
+
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant={isSelectionMode ? "default" : "outline"}
+                size="sm"
+                onClick={toggleSelectionMode}
+              >
+                {isSelectionMode ? "Cancel" : "Select Tests"}
+              </Button>
+              {isSelectionMode && selectedTests.size === 2 && (
+                <Button size="sm" onClick={handleCompare}>
+                  <GitCompare className="h-4 w-4 mr-2" />
+                  Compare
+                </Button>
+              )}
+              {isSelectionMode && selectedTests.size > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  {selectedTests.size} test{selectedTests.size !== 1 ? "s" : ""} selected
+                </span>
+              )}
+            </div>
           </div>
 
           <Tabs defaultValue="all" className="space-y-6">

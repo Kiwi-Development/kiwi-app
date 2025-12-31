@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select";
-import { useToast } from "../../../../hooks/use-toast";
+import { useToast } from "../../../hooks/use-toast";
 import { CheckCircle2, LinkIcon } from "lucide-react";
 import { useState } from "react";
 
