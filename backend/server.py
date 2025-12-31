@@ -83,6 +83,13 @@ class ClickRequest(BaseModel):
 class ScreenshotRequest(BaseModel):
     sessionId: str
 
+class ExtractContextRequest(BaseModel):
+    sessionId: str
+
+class FigmaMetadataRequest(BaseModel):
+    url: str
+    apiToken: Optional[str] = None
+
 @app.get("/health")
 async def health():
     """Basic health check"""
@@ -194,6 +201,67 @@ async def screenshot(request: ScreenshotRequest):
                 "message": str(e),
                 "details": error_details
             }
+        )
+
+@app.post("/extract-context")
+async def extract_context(request: ExtractContextRequest):
+    """Extract semantic context (DOM, accessibility, metadata) from current page"""
+    session_id = request.sessionId
+    
+    try:
+        context = run_async(browser_controller.extract_context(session_id))
+        return {
+            "status": "ok",
+            "context": context
+        }
+    except Exception as e:
+        logger.error(f"Error extracting context: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": str(e)}
+        )
+
+@app.post("/figma-metadata")
+async def figma_metadata(request: FigmaMetadataRequest):
+    """Fetch Figma metadata for a given Figma URL (optional enhancement)
+    
+    For public Figma prototypes, this is optional. If no API token is provided,
+    the system will use DOM/A11y extraction instead, which works for any website.
+    """
+    url = request.url
+    api_token = request.apiToken or os.environ.get('FIGMA_API_TOKEN')
+    
+    try:
+        import figma_client
+        
+        if not figma_client.is_figma_url(url):
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": "URL is not a valid Figma URL"}
+            )
+        
+        file_key = figma_client.extract_file_key_from_url(url)
+        if not file_key:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": "Could not extract file key from URL"}
+            )
+        
+        # Fetch metadata (will return minimal response if no token)
+        metadata = figma_client.fetch_figma_metadata(file_key, api_token)
+        
+        return {
+            "status": "ok",
+            "metadata": metadata,
+            "enhanced": api_token is not None and metadata.get("metadata_available", False)  # Indicates if full metadata is available
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching Figma metadata: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": str(e)}
         )
 
 if __name__ == '__main__':

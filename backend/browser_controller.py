@@ -125,3 +125,23 @@ async def take_screenshot(session_id: str) -> bytes:
     else:
         print(f"Error: Session {session_id} not found or closed.")
         return b""
+
+async def extract_context(session_id: str) -> dict:
+    """
+    Extracts semantic context (DOM, accessibility, metadata) from the current page.
+    """
+    global _sessions
+    page = _sessions.get(session_id)
+    
+    if not page or page.is_closed():
+        print(f"Error: Session {session_id} not found or closed.")
+        return {"error": "Session not found or closed"}
+    
+    try:
+        import context_extractor
+        print(f"Extracting context for session {session_id}...")
+        context = await context_extractor.extract_semantic_context(page)
+        return context
+    except Exception as e:
+        print(f"Error extracting context: {e}")
+        return {"error": str(e)}
