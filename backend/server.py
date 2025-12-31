@@ -24,10 +24,13 @@ logger.setLevel(logging.DEBUG)
 
 # Enable CORS for all routes
 # In production, set ALLOWED_ORIGINS environment variable with comma-separated origins
-ALLOWED_ORIGINS = os.getenv(
+# Note: Remove trailing slashes from URLs for proper CORS matching
+raw_origins = os.getenv(
     "ALLOWED_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000"
-).split(",")
+)
+# Split by comma and strip whitespace/trailing slashes
+ALLOWED_ORIGINS = [origin.strip().rstrip('/') for origin in raw_origins.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,

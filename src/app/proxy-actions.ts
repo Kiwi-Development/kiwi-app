@@ -21,9 +21,9 @@ if (typeof window === "undefined") {
 }
 
 export async function startSession(url: string) {
-  console.log(`[Proxy] Starting session for URL: ${url} at ${BASE_URL}`);
   try {
-    const res = await fetch(`${BASE_URL}/start`, {
+    const backendUrl = `${BASE_URL}/start`;
+    const res = await fetch(backendUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
@@ -32,14 +32,18 @@ export async function startSession(url: string) {
 
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Failed to start session: ${res.status} ${text}`);
+      const errorMessage = `Backend request failed: ${res.status} ${res.statusText}. URL: ${backendUrl}. Response: ${text}`;
+      throw new Error(errorMessage);
     }
 
     return await res.json();
   } catch (error) {
-    console.error("[Proxy] Start session error:", error);
-    const message = error instanceof Error ? error.message : "Failed to start session";
-    throw new Error(message);
+    // Provide more detailed error information
+    const errorMessage =
+      error instanceof Error
+        ? `Failed to connect to backend at ${BASE_URL}: ${error.message}`
+        : `Failed to connect to backend at ${BASE_URL}: Unknown error`;
+    throw new Error(errorMessage);
   }
 }
 
