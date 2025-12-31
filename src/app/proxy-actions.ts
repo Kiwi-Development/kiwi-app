@@ -1,6 +1,19 @@
 "use server";
 
-const BASE_URL = `http://${process.env.NEXT_PUBLIC_EC2_IP || "localhost"}:${process.env.NEXT_PUBLIC_BACKEND_PORT || "5001"}`;
+// Determine protocol and URL format based on environment
+// Local development uses http with port, production (Render) uses https without port
+const host = process.env.NEXT_PUBLIC_EC2_IP || "localhost";
+const isLocalhost = !host || host === "localhost" || host.startsWith("127.0.0.1");
+
+let BASE_URL: string;
+if (isLocalhost) {
+  // Local development: http://localhost:5001
+  const port = process.env.NEXT_PUBLIC_BACKEND_PORT || "5001";
+  BASE_URL = `http://${host}:${port}`;
+} else {
+  // Production (Render): https://kiwi-backend.onrender.com (no port needed)
+  BASE_URL = `https://${host}`;
+}
 
 // Debug: Log the backend URL being used
 if (typeof window === "undefined") {
