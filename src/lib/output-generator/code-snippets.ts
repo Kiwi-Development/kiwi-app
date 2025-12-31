@@ -58,8 +58,8 @@ export function generateCodeSnippets(finding: AgentFinding): CodeSnippet[] {
     }
   }
 
-  // UX fixes
-  if (finding.category === 'ux') {
+  // UX fixes (check for UX-related categories)
+  if (finding.category === 'navigation' || finding.category === 'copy' || finding.category === 'affordance_feedback' || finding.category === 'forms' || finding.category === 'hierarchy') {
     if (finding.description.toLowerCase().includes("fitts' law") || finding.description.toLowerCase().includes('button size')) {
       snippets.push({
         language: 'tailwind',

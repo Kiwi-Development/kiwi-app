@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AppLayout } from "../../../../components/app-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../../../components/ui/card";
@@ -11,7 +11,7 @@ import { testStore } from "../../../../lib/test-store";
 import { supabase } from "../../../../lib/supabase";
 import { compareRuns } from "../../../../lib/comparison-engine";
 
-export default function ComparePage() {
+function ComparePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const testId = searchParams.get("testId"); // Single test - compare all runs
@@ -660,6 +660,22 @@ export default function ComparePage() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+export default function ComparePage() {
+  return (
+    <Suspense fallback={
+      <AppLayout>
+        <div className="container mx-auto p-6">
+          <div className="flex items-center justify-center h-64">
+            <p>Loading comparison...</p>
+          </div>
+        </div>
+      </AppLayout>
+    }>
+      <ComparePageContent />
+    </Suspense>
   );
 }
 

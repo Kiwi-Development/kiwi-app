@@ -179,7 +179,7 @@ function validateFindings(findings: AgentFinding[]): AgentFinding[] {
  * Sort findings by priority
  */
 function sortByPriority(findings: AgentFinding[]): AgentFinding[] {
-  const severityWeight = { High: 3, Med: 2, Low: 1 };
+  const severityWeight: Record<'Blocker' | 'High' | 'Med' | 'Low', number> = { Blocker: 4, High: 3, Med: 2, Low: 1 };
   
   return [...findings].sort((a, b) => {
     // First by severity

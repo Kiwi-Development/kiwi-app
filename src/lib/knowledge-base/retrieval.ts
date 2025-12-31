@@ -102,7 +102,7 @@ export async function retrieveKnowledgeForIssue(
   const knowledgeCategory = issueCategory ? categoryMap[issueCategory] : undefined;
 
   return retrieveKnowledge(issueDescription, {
-    category: knowledgeCategory,
+    category: knowledgeCategory || undefined, // Convert null to undefined
     threshold: 0.7,
     limit: 5,
   });

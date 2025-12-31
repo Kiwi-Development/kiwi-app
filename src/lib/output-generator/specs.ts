@@ -28,7 +28,7 @@ export function generateSpec(finding: AgentFinding): Spec {
       content: extractRequiredContent(finding),
     },
     wcagGuideline: finding.category === 'accessibility' ? extractWCAGGuideline(finding) : null,
-    uxPrinciple: finding.category === 'ux' ? extractUXPrinciple(finding) : null,
+    uxPrinciple: (finding.category === 'navigation' || finding.category === 'copy' || finding.category === 'affordance_feedback' || finding.category === 'forms' || finding.category === 'hierarchy') ? extractUXPrinciple(finding) : null,
   };
 
   return {

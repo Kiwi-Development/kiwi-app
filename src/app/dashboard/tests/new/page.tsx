@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppLayout } from "../../../../components/app-layout";
 import { StepIndicator } from "../../../../components/test-wizard/step-indicator";
@@ -38,7 +38,7 @@ import {
 } from "../../../../components/ui/dialog";
 import { personaStore, type Persona } from "../../../../lib/persona-store";
 
-export default function NewTestPage() {
+function NewTestPageContent() {
   const searchParams = useSearchParams();
   const testId = searchParams.get("id");
   const [isEditing, setIsEditing] = useState(false);
@@ -1107,5 +1107,21 @@ export default function NewTestPage() {
         </div>
       </main>
     </AppLayout>
+  );
+}
+
+export default function NewTestPage() {
+  return (
+    <Suspense fallback={
+      <AppLayout>
+        <div className="container mx-auto p-6">
+          <div className="flex items-center justify-center h-64">
+            <p>Loading...</p>
+          </div>
+        </div>
+      </AppLayout>
+    }>
+      <NewTestPageContent />
+    </Suspense>
   );
 }
