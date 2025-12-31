@@ -112,8 +112,9 @@ python server.py
      - **Name**: `kiwi-backend`
      - **Root Directory**: `backend`
      - **Environment**: Python 3
-     - **Build Command**: `pip install -r requirements.txt && playwright install chromium`
-     - **Note**: If you get "Executable doesn't exist" errors, the browsers may need to be installed. Try the build command again or check Render logs.
+     - **Build Command**: `pip install -r requirements.txt && python -m playwright install chromium`
+     - **Important**: Use `python -m playwright` (not just `playwright`) to ensure it runs in the correct Python environment
+     - **Note**: If browsers still aren't found at runtime, the server will attempt to install them automatically (may take a few minutes on first request)
      - **Start Command**: `python server.py`
      - **Health Check Path**: `/health`
 

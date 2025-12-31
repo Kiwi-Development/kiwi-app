@@ -2,6 +2,7 @@ import asyncio
 from playwright.async_api import async_playwright
 import subprocess
 import sys
+import os
 
 import uuid
 
@@ -17,33 +18,43 @@ async def ensure_browsers_installed():
         return
     
     try:
-        # Try to import and check if browsers are available
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            try:
-                # Try to get chromium - if this fails, browsers aren't installed
-                browser = p.chromium.launch(headless=True)
-                browser.close()
-                _browsers_installed = True
-                return
-            except Exception:
-                pass
+        # Check if browsers are installed by trying to launch (async)
+        test_playwright = await async_playwright().start()
+        try:
+            test_browser = await test_playwright.chromium.launch(headless=True, args=['--no-sandbox'])
+            await test_browser.close()
+            await test_playwright.stop()
+            _browsers_installed = True
+            print("Playwright browsers are already installed")
+            return
+        except Exception as launch_err:
+            await test_playwright.stop()
+            print(f"Browsers not available: {launch_err}")
         
-        # If we get here, browsers aren't installed - try to install them
+        # If we get here, browsers aren't installed - try to install them using subprocess
         print("Playwright browsers not found, attempting to install...")
-        result = subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
-            capture_output=True,
-            text=True,
-            timeout=300  # 5 minute timeout
+        # Run in executor to avoid blocking
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: subprocess.run(
+                [sys.executable, "-m", "playwright", "install", "chromium"],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
         )
         if result.returncode == 0:
             print("Successfully installed Playwright browsers")
             _browsers_installed = True
         else:
-            print(f"Failed to install browsers: {result.stderr}")
+            print(f"Failed to install browsers. Return code: {result.returncode}")
+            print(f"stdout: {result.stdout}")
+            print(f"stderr: {result.stderr}")
     except Exception as e:
         print(f"Error checking/installing browsers: {e}")
+        import traceback
+        traceback.print_exc()
 
 async def start_session(url: str) -> str:
     """

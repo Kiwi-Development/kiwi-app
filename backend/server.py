@@ -14,7 +14,7 @@ import browser_controller
 import sys
 import traceback
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
@@ -104,7 +104,7 @@ async def health():
     """Basic health check"""
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "service": "kiwi-backend"
     }
 
@@ -116,7 +116,7 @@ async def readiness():
         # This is a simple check - you can add more sophisticated checks
         return {
             "status": "ready",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "service": "kiwi-backend",
             "checks": {
                 "playwright_loop": "running"
@@ -137,7 +137,7 @@ async def liveness():
     """Liveness probe - checks if service is alive"""
     return {
         "status": "alive",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "service": "kiwi-backend",
         "uptime": "running"
     }
