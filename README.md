@@ -48,6 +48,7 @@ NEXT_PUBLIC_BACKEND_PORT=5001
 ```
 
 **Where to get these values:**
+
 - **Supabase**: Go to your Supabase project → Settings → API
 - **OpenAI**: Get from [OpenAI Platform](https://platform.openai.com/api-keys)
 
@@ -72,6 +73,7 @@ python server.py
 ```
 
 **Server URLs:**
+
 - Frontend: [http://localhost:3000](http://localhost:3000)
 - Backend: [http://localhost:5001](http://localhost:5001)
 
@@ -110,7 +112,8 @@ python server.py
      - **Name**: `kiwi-backend`
      - **Root Directory**: `backend`
      - **Environment**: Python 3
-     - **Build Command**: `pip install -r requirements.txt && playwright install-deps chromium && playwright install chromium`
+     - **Build Command**: `pip install -r requirements.txt && playwright install chromium`
+     - **Note**: If you get "Executable doesn't exist" errors, the browsers may need to be installed. Try the build command again or check Render logs.
      - **Start Command**: `python server.py`
      - **Health Check Path**: `/health`
 

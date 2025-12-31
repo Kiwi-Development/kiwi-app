@@ -1,11 +1,49 @@
 import asyncio
 from playwright.async_api import async_playwright
+import subprocess
+import sys
 
 import uuid
 
 _playwright = None
 _browser = None
 _sessions = {}
+_browsers_installed = False
+
+async def ensure_browsers_installed():
+    """Ensure Playwright browsers are installed (for Render compatibility)"""
+    global _browsers_installed
+    if _browsers_installed:
+        return
+    
+    try:
+        # Try to import and check if browsers are available
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            try:
+                # Try to get chromium - if this fails, browsers aren't installed
+                browser = p.chromium.launch(headless=True)
+                browser.close()
+                _browsers_installed = True
+                return
+            except Exception:
+                pass
+        
+        # If we get here, browsers aren't installed - try to install them
+        print("Playwright browsers not found, attempting to install...")
+        result = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+        if result.returncode == 0:
+            print("Successfully installed Playwright browsers")
+            _browsers_installed = True
+        else:
+            print(f"Failed to install browsers: {result.stderr}")
+    except Exception as e:
+        print(f"Error checking/installing browsers: {e}")
 
 async def start_session(url: str) -> str:
     """
@@ -14,22 +52,39 @@ async def start_session(url: str) -> str:
     """
     global _playwright, _browser, _sessions
     
+    # Ensure browsers are installed before starting
+    await ensure_browsers_installed()
+    
     if not _playwright:
         print("Starting Playwright...")
         _playwright = await async_playwright().start()
         
     if not _browser:
         print("Launching Browser...")
-        _browser = await _playwright.chromium.launch(
-            headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                '--use-gl=swiftshader',
-                '--enable-webgl',
-                '--ignore-gpu-blocklist',
-            ]
-        )
+        try:
+            _browser = await _playwright.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--use-gl=swiftshader',
+                    '--enable-webgl',
+                    '--ignore-gpu-blocklist',
+                    '--disable-setuid-sandbox',
+                    '--disable-gpu',
+                ]
+            )
+        except Exception as e:
+            print(f"Error launching browser with full args: {e}")
+            # Try with minimal args if first attempt fails
+            try:
+                _browser = await _playwright.chromium.launch(
+                    headless=True,
+                    args=['--no-sandbox', '--disable-dev-shm-usage']
+                )
+            except Exception as e2:
+                print(f"Error launching browser with minimal args: {e2}")
+                raise
         
     session_id = str(uuid.uuid4())
     print(f"Opening new page for session {session_id} and navigating to {url}...")
