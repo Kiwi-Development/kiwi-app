@@ -1,11 +1,11 @@
 /**
  * RAG Retrieval System
- * 
+ *
  * Retrieves relevant knowledge chunks with citation support for agents
  */
 
-import { generateEmbedding } from './embeddings';
-import { searchKnowledgeChunks, getKnowledgeChunkById, KnowledgeChunk } from './vector-store';
+import { generateEmbedding } from "./embeddings";
+import { searchKnowledgeChunks, getKnowledgeChunkById, KnowledgeChunk } from "./vector-store";
 
 export interface Citation {
   chunkId: string;
@@ -28,7 +28,7 @@ export interface RetrievalResult {
 export async function retrieveKnowledge(
   query: string,
   options: {
-    category?: KnowledgeChunk['category'];
+    category?: KnowledgeChunk["category"];
     threshold?: number;
     limit?: number;
   } = {}
@@ -41,7 +41,7 @@ export async function retrieveKnowledge(
     const chunks = await searchKnowledgeChunks(queryEmbedding, options);
 
     // Format citations
-    const citations: Citation[] = chunks.map(chunk => ({
+    const citations: Citation[] = chunks.map((chunk) => ({
       chunkId: chunk.id,
       source: chunk.source,
       title: chunk.title,
@@ -59,11 +59,11 @@ export async function retrieveKnowledge(
       context,
     };
   } catch (error) {
-    console.error('Error retrieving knowledge:', error);
+    console.error("Error retrieving knowledge:", error);
     return {
       chunks: [],
       citations: [],
-      context: '',
+      context: "",
     };
   }
 }
@@ -73,7 +73,7 @@ export async function retrieveKnowledge(
  */
 function formatContextForAgent(chunks: KnowledgeChunk[]): string {
   if (chunks.length === 0) {
-    return '';
+    return "";
   }
 
   const sections = chunks.map((chunk, index) => {
@@ -81,7 +81,7 @@ function formatContextForAgent(chunks: KnowledgeChunk[]): string {
     return `${citation}\n${chunk.content}\n`;
   });
 
-  return `\n=== RELEVANT DESIGN KNOWLEDGE ===\n\n${sections.join('\n---\n\n')}\n\n=== END KNOWLEDGE ===\n`;
+  return `\n=== RELEVANT DESIGN KNOWLEDGE ===\n\n${sections.join("\n---\n\n")}\n\n=== END KNOWLEDGE ===\n`;
 }
 
 /**
@@ -89,14 +89,14 @@ function formatContextForAgent(chunks: KnowledgeChunk[]): string {
  */
 export async function retrieveKnowledgeForIssue(
   issueDescription: string,
-  issueCategory?: 'ux' | 'accessibility' | 'conversion'
+  issueCategory?: "ux" | "accessibility" | "conversion"
 ): Promise<RetrievalResult> {
   // Map issue category to knowledge category
   // For UX issues, search across multiple relevant categories
-  const categoryMap: Record<string, KnowledgeChunk['category'] | null> = {
+  const categoryMap: Record<string, KnowledgeChunk["category"] | null> = {
     ux: null, // Search all UX-related categories
-    accessibility: 'wcag',
-    conversion: 'growth_patterns',
+    accessibility: "wcag",
+    conversion: "growth_patterns",
   };
 
   const knowledgeCategory = issueCategory ? categoryMap[issueCategory] : undefined;
@@ -113,14 +113,14 @@ export async function retrieveKnowledgeForIssue(
  */
 export function formatCitations(citations: Citation[]): string {
   if (citations.length === 0) {
-    return '';
+    return "";
   }
 
   return citations
     .map((citation, index) => {
       return `[${index + 1}] ${citation.source} - ${citation.title} (${citation.category})`;
     })
-    .join('\n');
+    .join("\n");
 }
 
 /**
@@ -132,11 +132,10 @@ export function getCitationObjects(citations: Citation[]): Array<{
   title: string;
   category: string;
 }> {
-  return citations.map(citation => ({
+  return citations.map((citation) => ({
     chunk_id: citation.chunkId,
     source: citation.source,
     title: citation.title,
     category: citation.category,
   }));
 }
-
