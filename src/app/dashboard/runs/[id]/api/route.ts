@@ -7,7 +7,7 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { screenshot, tasks, history, persona, currentProgress, runIndex } = await req.json();
+    const { screenshot, tasks, history, persona, currentProgress, runIndex, goal } = await req.json();
 
     if (!screenshot) {
       return NextResponse.json({ error: "Screenshot is required" }, { status: 400 });

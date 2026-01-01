@@ -155,7 +155,6 @@ class TestStore {
         goal: db.goal || "",
         selectedPersona: (db.heuristics as { selectedPersona?: string })?.selectedPersona || "",
         runCount: (db.heuristics as { runCount?: number })?.runCount || 1,
-        useCase: db.use_case || "",
         tasks: db.tasks || [],
         figmaUrlA: db.figma_url_a || undefined,
         figmaUrlB: db.figma_url_b || undefined,
@@ -260,7 +259,7 @@ class TestStore {
         user_id: session.user.id,
         organization_id: null, // Can be set later
         goal: testData?.goal || null,
-        use_case: testData?.useCase || null,
+        use_case: null, // Deprecated field, kept for database compatibility
         artifact_type: test.artifactType,
         figma_url_a: testData?.figmaUrlA || null,
         figma_url_b: testData?.figmaUrlB || null,
