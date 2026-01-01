@@ -5,31 +5,49 @@ function getBaseUrl(): string {
   const host = process.env.NEXT_PUBLIC_EC2_IP || "localhost";
   const isLocalhost = !host || host === "localhost" || host.startsWith("127.0.0.1");
 
+  console.log(`[Proxy] getBaseUrl - host: ${host}, isLocalhost: ${isLocalhost}`);
+
   if (isLocalhost) {
     // Local development: http://localhost:5001
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || "5001";
-    return `http://${host}:${port}`;
+    const url = `http://${host}:${port}`;
+    console.log(`[Proxy] Using localhost URL: ${url}`);
+    return url;
   } else {
     // Production (Render): https://kiwi-backend.onrender.com (no port needed)
     // Ensure host doesn't already have https://
     const cleanHost = host.replace(/^https?:\/\//, "");
-    return `https://${cleanHost}`;
+    const url = `https://${cleanHost}`;
+    console.log(`[Proxy] Using production URL: ${url}`);
+    return url;
   }
 }
 
 export async function startSession(url: string, retryCount = 0): Promise<any> {
-  const BASE_URL = getBaseUrl();
-  const backendUrl = `${BASE_URL}/start`;
-  const maxRetries = 1; // Retry once for cold start
-
-  console.log(
-    `[Proxy] Starting session (attempt ${retryCount + 1}/${maxRetries + 1}) - URL: ${backendUrl}, Target: ${url}`
-  );
-  console.log(
-    `[Proxy] Environment - NEXT_PUBLIC_EC2_IP: ${process.env.NEXT_PUBLIC_EC2_IP}, NEXT_PUBLIC_BACKEND_PORT: ${process.env.NEXT_PUBLIC_BACKEND_PORT}`
-  );
+  console.log(`[Proxy] startSession called with url: ${url}, retryCount: ${retryCount}`);
 
   try {
+    // Validate environment variables early
+    const host = process.env.NEXT_PUBLIC_EC2_IP;
+    if (!host || host.trim() === "") {
+      const errorMsg =
+        "NEXT_PUBLIC_EC2_IP environment variable is not set. Please configure it in Vercel.";
+      console.error(`[Proxy] ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
+    const BASE_URL = getBaseUrl();
+    const backendUrl = `${BASE_URL}/start`;
+    const maxRetries = 1; // Retry once for cold start
+
+    console.log(
+      `[Proxy] Starting session (attempt ${retryCount + 1}/${maxRetries + 1}) - Backend URL: ${backendUrl}, Target Figma URL: ${url}`
+    );
+    console.log(
+      `[Proxy] Environment variables - NEXT_PUBLIC_EC2_IP: ${host || "NOT SET"}, NEXT_PUBLIC_BACKEND_PORT: ${process.env.NEXT_PUBLIC_BACKEND_PORT || "NOT SET"}`
+    );
+    console.log(`[Proxy] Computed BASE_URL: ${BASE_URL}`);
+
     const controller = new AbortController();
     // Timeout: 120 seconds (Starter tier has no cold starts, but Playwright operations can take time)
     const timeout = 120000;
@@ -97,12 +115,32 @@ export async function startSession(url: string, retryCount = 0): Promise<any> {
     }
   } catch (error) {
     // Provide more detailed error information
-    const errorMessage =
-      error instanceof Error
-        ? `Failed to connect to backend at ${BASE_URL}: ${error.message}`
-        : `Failed to connect to backend at ${BASE_URL}: Unknown error`;
-    console.error(`[Proxy] ${errorMessage}`);
-    throw new Error(errorMessage);
+    const BASE_URL = getBaseUrl();
+
+    // Extract error message safely (ensure it's serializable)
+    let errorMessage: string;
+    if (error instanceof Error) {
+      errorMessage = error.message || "Unknown error";
+      // Log full error details for debugging (not in the thrown error)
+      console.error(`[Proxy] startSession error caught in outer catch:`, error);
+      console.error(`[Proxy] Error type: ${error.constructor.name}`);
+      console.error(`[Proxy] Error message: ${errorMessage}`);
+      if (error.stack) {
+        console.error(`[Proxy] Error stack:`, error.stack);
+      }
+    } else if (typeof error === "string") {
+      errorMessage = error;
+    } else {
+      errorMessage = "Unknown error occurred";
+      console.error(`[Proxy] startSession error (non-Error type):`, error);
+    }
+
+    // Log the constructed message
+    const finalMessage = `Failed to connect to backend at ${BASE_URL}: ${errorMessage}`;
+    console.error(`[Proxy] Throwing error: ${finalMessage}`);
+
+    // Throw a simple Error with a plain string message (serializable)
+    throw new Error(finalMessage);
   }
 }
 

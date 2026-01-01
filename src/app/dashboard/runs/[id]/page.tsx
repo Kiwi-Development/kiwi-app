@@ -317,7 +317,15 @@ export default function LiveRunPage() {
       });
 
       // Start unique session for this run
-      const startData = await startSession(figmaUrl);
+      console.log(`[LiveRunPage] About to call startSession with figmaUrl: ${figmaUrl}`);
+      let startData;
+      try {
+        startData = await startSession(figmaUrl);
+        console.log(`[LiveRunPage] startSession succeeded:`, startData);
+      } catch (error) {
+        console.error(`[LiveRunPage] startSession failed:`, error);
+        throw error;
+      }
       const sessionId = startData.sessionId;
 
       // Wait for server to be ready
@@ -872,7 +880,15 @@ export default function LiveRunPage() {
         }));
 
         // Start session on backend via Server Action
-        const startData = await startSession(figmaUrl);
+        console.log(`[Run ${runIndex + 1}] About to call startSession with figmaUrl: ${figmaUrl}`);
+        let startData;
+        try {
+          startData = await startSession(figmaUrl);
+          console.log(`[Run ${runIndex + 1}] startSession succeeded:`, startData);
+        } catch (error) {
+          console.error(`[Run ${runIndex + 1}] startSession failed:`, error);
+          throw error;
+        }
         sessionId = startData.sessionId;
         sessionIdRef.current = sessionId;
 
