@@ -250,13 +250,14 @@ export default function TestsPage() {
   };
 
   const handleCompare = () => {
-    if (selectedTests.size === 2) {
-      const [testA, testB] = Array.from(selectedTests);
-      router.push(`/dashboard/tests/compare?testA=${testA}&testB=${testB}`);
+    if (selectedTests.size >= 2) {
+      const testIds = Array.from(selectedTests);
+      const queryParams = testIds.map((id, idx) => `test${idx + 1}=${id}`).join("&");
+      router.push(`/dashboard/tests/compare?${queryParams}`);
     } else {
       toast({
-        title: "Select 2 tests",
-        description: "Please select exactly 2 tests to compare.",
+        title: "Select tests",
+        description: "Please select at least 2 tests to compare.",
         variant: "destructive",
       });
     }
@@ -430,10 +431,10 @@ export default function TestsPage() {
               >
                 {isSelectionMode ? "Cancel" : "Select Tests"}
               </Button>
-              {isSelectionMode && selectedTests.size === 2 && (
+              {isSelectionMode && selectedTests.size >= 2 && (
                 <Button size="sm" onClick={handleCompare}>
                   <GitCompare className="h-4 w-4 mr-2" />
-                  Compare
+                  Compare ({selectedTests.size})
                 </Button>
               )}
               {isSelectionMode && selectedTests.size > 0 && (

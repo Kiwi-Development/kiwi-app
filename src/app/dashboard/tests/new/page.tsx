@@ -48,7 +48,6 @@ function NewTestPageContent() {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [loadingPersonas, setLoadingPersonas] = useState(true);
 
-  const [useCase, setUseCase] = useState("");
   const [mutation, setMutation] = useState([2]);
   const [prototypeType, setPrototypeType] = useState<"" | "live" | "figma">("");
   const [figmaUrl, setFigmaUrl] = useState("");
@@ -107,7 +106,6 @@ function NewTestPageContent() {
           if (test) {
             setTestName(test.title);
             setGoal(test.testData?.goal || "");
-            setUseCase(test.testData?.useCase || "");
             setSelectedPersona(test.testData?.selectedPersona || "");
             setRunCount((test.testData as any)?.runCount || 1);
             setTasks(test.testData?.tasks || []);
@@ -179,10 +177,6 @@ function NewTestPageContent() {
         newErrors.selectedPersona = true;
         isValid = false;
       }
-      if (!useCase.trim()) {
-        newErrors.useCase = true;
-        isValid = false;
-      }
     } else if (currentStep === 3) {
       if (!prototypeType) {
         newErrors.prototypeType = true;
@@ -211,6 +205,9 @@ function NewTestPageContent() {
   const handleBack = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
+    } else {
+      // If on step 1, navigate back to tests page
+      router.push("/dashboard/tests");
     }
   };
 
@@ -308,7 +305,6 @@ function NewTestPageContent() {
         goal,
         selectedPersona,
         runCount,
-        useCase,
         tasks,
         figmaUrlA: figmaUrl,
         liveUrl,
@@ -372,7 +368,6 @@ function NewTestPageContent() {
         goal,
         selectedPersona,
         runCount,
-        useCase,
         tasks,
         figmaUrlA: figmaUrl,
         liveUrl,
@@ -519,9 +514,11 @@ function NewTestPageContent() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="1">1 run</SelectItem>
-                        <SelectItem value="2">2 runs</SelectItem>
-                        <SelectItem value="3">3 runs</SelectItem>
+                        {Array.from({ length: 20 }, (_, i) => i + 1).map((num) => (
+                          <SelectItem key={num} value={num.toString()}>
+                            {num} {num === 1 ? "run" : "runs"}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
@@ -529,17 +526,6 @@ function NewTestPageContent() {
                     </p>
                   </div>
                 )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="useCase">Use Case *</Label>
-                  <Textarea
-                    id="useCase"
-                    value={useCase}
-                    onChange={(e) => setUseCase(e.target.value)}
-                    placeholder="Test the usability of the evaluation models interface for comparing AI outputs"
-                    className={`min-h-24 ${errors.useCase ? "border-red-500" : ""}`}
-                  />
-                </div>
 
                 <div className="space-y-3">
                   <Label>Persona Variants</Label>
@@ -1027,9 +1013,6 @@ function NewTestPageContent() {
                         <span className="text-sm text-muted-foreground">No persona selected</span>
                       )}
                     </div>
-                    <div className="text-sm">
-                      <span className="text-muted-foreground block mb-1">Use Case: {useCase}</span>
-                    </div>
                   </div>
                 </div>
 
@@ -1100,7 +1083,7 @@ function NewTestPageContent() {
         )}
 
         <div className="flex justify-between pt-6">
-          <Button onClick={handleBack} variant="outline" disabled={currentStep === 1}>
+          <Button onClick={handleBack} variant="outline">
             Back
           </Button>
           {currentStep < 5 && <Button onClick={handleNext}>Next</Button>}
@@ -1112,15 +1095,17 @@ function NewTestPageContent() {
 
 export default function NewTestPage() {
   return (
-    <Suspense fallback={
-      <AppLayout>
-        <div className="container mx-auto p-6">
-          <div className="flex items-center justify-center h-64">
-            <p>Loading...</p>
+    <Suspense
+      fallback={
+        <AppLayout>
+          <div className="container mx-auto p-6">
+            <div className="flex items-center justify-center h-64">
+              <p>Loading...</p>
+            </div>
           </div>
-        </div>
-      </AppLayout>
-    }>
+        </AppLayout>
+      }
+    >
       <NewTestPageContent />
     </Suspense>
   );

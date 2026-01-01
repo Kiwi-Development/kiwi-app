@@ -3,9 +3,22 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AppLayout } from "../../../../components/app-layout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../../../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { Badge } from "../../../../components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../../components/ui/select";
 import { ArrowLeft, TrendingUp, TrendingDown, AlertCircle, CheckCircle2 } from "lucide-react";
 import { testStore } from "../../../../lib/test-store";
 import { supabase } from "../../../../lib/supabase";
@@ -15,14 +28,38 @@ function ComparePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const testId = searchParams.get("testId"); // Single test - compare all runs
-  const testAId = searchParams.get("testA"); // Legacy: two different tests
-  const testBId = searchParams.get("testB"); // Legacy: two different tests
+
+  // Get all test IDs from URL (test1, test2, test3, etc. or legacy testA, testB)
+  const testIds: string[] = [];
+  let idx = 1;
+  while (searchParams.get(`test${idx}`)) {
+    testIds.push(searchParams.get(`test${idx}`)!);
+    idx++;
+  }
+  // Support legacy testA and testB for backwards compatibility
+  const testAId = searchParams.get("testA");
+  const testBId = searchParams.get("testB");
   const runAId = searchParams.get("runA"); // Optional: specific run for test A
   const runBId = searchParams.get("runB"); // Optional: specific run for test B
+  if (testAId && !testIds.includes(testAId)) testIds.push(testAId);
+  if (testBId && !testIds.includes(testBId)) testIds.push(testBId);
+
   const [loading, setLoading] = useState(true);
   const [comparison, setComparison] = useState<any>(null);
   const [allRuns, setAllRuns] = useState<any[]>([]);
   const [test, setTest] = useState<any>(null);
+  const [tests, setTests] = useState<any[]>([]); // Array of all tests being compared
+  const [testRuns, setTestRuns] = useState<Record<string, any[]>>({}); // Runs for each test
+  const [selectedRuns, setSelectedRuns] = useState<Record<string, string>>({}); // Selected run ID for each test
+  // Legacy state for 2-test comparison (backwards compatibility)
+  const [runA, setRunA] = useState<any>(null);
+  const [runB, setRunB] = useState<any>(null);
+  const [testARuns, setTestARuns] = useState<any[]>([]);
+  const [testBRuns, setTestBRuns] = useState<any[]>([]);
+  const [selectedRunAId, setSelectedRunAId] = useState<string | null>(null);
+  const [selectedRunBId, setSelectedRunBId] = useState<string | null>(null);
+  const [testA, setTestA] = useState<any>(null);
+  const [testB, setTestB] = useState<any>(null);
 
   useEffect(() => {
     const loadComparison = async () => {
@@ -35,13 +72,15 @@ function ComparePageContent() {
           // Get all runs for this test
           const { data: runs } = await supabase
             .from("test_runs")
-            .select("id, created_at, status, task_completion_percentage, duration_seconds, action_count")
+            .select(
+              "id, created_at, status, task_completion_percentage, duration_seconds, action_count"
+            )
             .eq("test_id", testId)
             .order("created_at", { ascending: false });
 
           if (runs && runs.length >= 2) {
             setAllRuns(runs);
-            
+
             // Compare all runs pairwise and aggregate results
             const comparisons: any[] = [];
             for (let i = 0; i < runs.length - 1; i++) {
@@ -54,7 +93,7 @@ function ComparePageContent() {
                 });
               }
             }
-            
+
             // Aggregate findings across all comparisons
             const aggregated = await aggregateMultiRunComparison(runs, comparisons);
             setComparison(aggregated);
@@ -70,55 +109,113 @@ function ComparePageContent() {
         return;
       }
 
-      // Legacy: Compare two different tests
-      if (!testAId || !testBId) {
+      // Compare multiple tests (2 or more)
+      if (testIds.length < 2) {
         router.push("/dashboard/tests");
         return;
       }
 
       try {
-        let runA, runB;
+        // Load all test data
+        const loadedTests = await Promise.all(testIds.map((id) => testStore.getTestById(id)));
+        const validTests = loadedTests.filter((t) => t !== undefined) as any[];
+        setTests(validTests);
 
-        // If specific run IDs are provided, use those; otherwise get latest runs
-        if (runAId) {
-          const { data } = await supabase
-            .from("test_runs")
-            .select("id")
-            .eq("id", runAId)
-            .maybeSingle();
-          runA = data;
-        } else {
-          const { data } = await supabase
-            .from("test_runs")
-            .select("id")
-            .eq("test_id", testAId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          runA = data;
+        // For backwards compatibility, set testA and testB if we have exactly 2 tests
+        if (validTests.length === 2) {
+          setTestA(validTests[0]);
+          setTestB(validTests[1]);
         }
 
-        if (runBId) {
-          const { data } = await supabase
+        // Load all runs for all tests
+        const runsMap: Record<string, any[]> = {};
+        const selectedRunsMap: Record<string, string> = {};
+
+        for (const test of validTests) {
+          const { data: runs } = await supabase
             .from("test_runs")
-            .select("id")
-            .eq("id", runBId)
-            .maybeSingle();
-          runB = data;
-        } else {
-          const { data } = await supabase
-            .from("test_runs")
-            .select("id")
-            .eq("test_id", testBId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          runB = data;
+            .select("id, created_at")
+            .eq("test_id", test.id)
+            .order("created_at", { ascending: false });
+
+          runsMap[test.id] = runs || [];
+          // Select latest run by default
+          if (runs && runs.length > 0) {
+            selectedRunsMap[test.id] = runs[0].id;
+          }
         }
 
-        if (runA?.id && runB?.id) {
-          const result = await compareRuns(runA.id, runB.id);
-          setComparison(result);
+        setTestRuns(runsMap);
+        setSelectedRuns(selectedRunsMap);
+
+        // For 2 tests, use the legacy comparison format
+        if (validTests.length === 2) {
+          const testA = validTests[0];
+          const testB = validTests[1];
+          const runsA = runsMap[testA.id] || [];
+          const runsB = runsMap[testB.id] || [];
+
+          setTestARuns(runsA);
+          setTestBRuns(runsB);
+
+          // Get selected runs (or latest)
+          const runAData = runAId ? runsA.find((r) => r.id === runAId) : runsA[0];
+          const runBData = runBId ? runsB.find((r) => r.id === runBId) : runsB[0];
+
+          if (runAData?.id && runBData?.id) {
+            setRunA(runAData);
+            setRunB(runBData);
+            setSelectedRunAId(runAData.id);
+            setSelectedRunBId(runBData.id);
+            const result = await compareRuns(runAData.id, runBData.id);
+            setComparison(result);
+          }
+        } else {
+          // For 3+ tests, aggregate findings from all tests
+          // Compare all pairs and aggregate results
+          const allFindings: any[] = [];
+          const findingCounts: Record<string, any> = {};
+
+          for (let i = 0; i < validTests.length; i++) {
+            const test = validTests[i];
+            const runs = runsMap[test.id] || [];
+            const selectedRunId = selectedRunsMap[test.id];
+            const selectedRun = runs.find((r) => r.id === selectedRunId) || runs[0];
+
+            if (selectedRun?.id) {
+              // Get findings for this test's selected run
+              const { data: entries } = await supabase
+                .from("feedback_entries")
+                .select("*")
+                .eq("test_run_id", selectedRun.id)
+                .order("created_at", { ascending: false });
+
+              const testFindings = (entries || []).map((e: any) => ({
+                ...e,
+                testId: test.id,
+                testTitle: test.title,
+              }));
+
+              allFindings.push(...testFindings);
+
+              // Count findings by severity for this test
+              const counts = { blocker: 0, high: 0, med: 0, low: 0 };
+              testFindings.forEach((f: any) => {
+                if (f.severity === "Blocker") counts.blocker++;
+                else if (f.severity === "High") counts.high++;
+                else if (f.severity === "Med") counts.med++;
+                else counts.low++;
+              });
+              findingCounts[test.id] = counts;
+            }
+          }
+
+          setComparison({
+            tests: validTests,
+            allFindings,
+            findingCounts,
+            isMultiTest: true,
+          });
         }
       } catch (error) {
         console.error("Error loading comparison:", error);
@@ -128,12 +225,15 @@ function ComparePageContent() {
     };
 
     loadComparison();
-  }, [testId, testAId, testBId, runAId, runBId, router]);
+  }, [testId, testIds.join(","), router]);
 
   // Aggregate findings from multiple pairwise comparisons
   async function aggregateMultiRunComparison(runs: any[], comparisons: any[]) {
     const allFindings = new Map<string, any>();
-    const findingCounts: Record<string, { blocker: number; high: number; med: number; low: number }> = {};
+    const findingCounts: Record<
+      string,
+      { blocker: number; high: number; med: number; low: number }
+    > = {};
     const confusionHotspots = new Map<string, { frequency: number; elements: Set<string> }>();
 
     // Initialize counts for each run
@@ -149,7 +249,7 @@ function ComparePageContent() {
         .select("*")
         .eq("test_run_id", run.id)
         .order("created_at", { ascending: false });
-      
+
       allRunFindings[run.id] = entries || [];
     }
 
@@ -157,7 +257,7 @@ function ComparePageContent() {
     runs.forEach((run, runIdx) => {
       const runNum = runIdx + 1;
       const findings = allRunFindings[run.id] || [];
-      
+
       findings.forEach((entry: any) => {
         const key = entry.title.toLowerCase();
         if (!allFindings.has(key)) {
@@ -193,9 +293,11 @@ function ComparePageContent() {
         if (entry.evidence_snippets && Array.isArray(entry.evidence_snippets)) {
           entry.evidence_snippets.forEach((evidence: any) => {
             if (evidence.ui_anchor) {
-              const area = evidence.ui_anchor.frame_name || evidence.ui_anchor.element_label || "Unknown";
-              const element = evidence.ui_anchor.element_selector || evidence.ui_anchor.element_label || "";
-              
+              const area =
+                evidence.ui_anchor.frame_name || evidence.ui_anchor.element_label || "Unknown";
+              const element =
+                evidence.ui_anchor.element_selector || evidence.ui_anchor.element_label || "";
+
               if (!confusionHotspots.has(area)) {
                 confusionHotspots.set(area, { frequency: 0, elements: new Set() });
               }
@@ -250,8 +352,20 @@ function ComparePageContent() {
     );
   }
 
-  // Check if this is a multi-run comparison (new format) or legacy 2-test comparison
-  const isMultiRunComparison = comparison.runs && comparison.runs.length > 0;
+  // Check if this is a multi-run comparison (new format) or multi-test comparison
+  const isMultiRunComparison = comparison?.runs && comparison.runs.length > 0;
+  const isMultiTestComparison = comparison?.isMultiTest === true;
+
+  // Ensure test data is loaded
+  if (!isMultiRunComparison && !isMultiTestComparison && (!testA || !testB) && tests.length === 0) {
+    return (
+      <AppLayout>
+        <div className="container mx-auto p-6">
+          <div className="text-center py-12">Loading test data...</div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -264,7 +378,11 @@ function ComparePageContent() {
             <p className="text-muted-foreground mt-2">
               {isMultiRunComparison
                 ? `Comparing ${comparison.runs.length} runs for "${comparison.test?.title || "Test"}"`
-                : "Before and after analysis"}
+                : isMultiTestComparison
+                  ? `Comparing ${tests.length} tests`
+                  : testA && testB
+                    ? `Comparing "${testA.title}" vs "${testB.title}"`
+                    : "Comparing test runs"}
             </p>
           </div>
           <Button variant="outline" onClick={() => router.back()}>
@@ -273,62 +391,40 @@ function ComparePageContent() {
           </Button>
         </div>
 
-        {isMultiRunComparison ? (
+        {isMultiTestComparison ? (
           <>
-            {/* Multi-Run Comparison View */}
+            {/* Multi-Test Comparison View (3+ tests) */}
             <div className="grid gap-4">
-              {/* Run Summary Cards */}
-              <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
-                {comparison.runs.map((run: any, idx: number) => {
-                  const runNum = idx + 1;
-                  const counts = comparison.findingCounts[`run${runNum}`] || {
+              {/* Summary Cards for Each Test */}
+              <div className="grid gap-4 md:grid-cols-3">
+                {tests.map((test, idx) => {
+                  const counts = comparison.findingCounts[test.id] || {
                     blocker: 0,
                     high: 0,
                     med: 0,
                     low: 0,
                   };
-                  const totalFindings = counts.blocker + counts.high + counts.med + counts.low;
-                  const date = new Date(run.created_at);
-                  const dateStr = date.toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
-
                   return (
-                    <Card key={run.id}>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-lg">Run {runNum}</CardTitle>
-                        <CardDescription>{dateStr}</CardDescription>
+                    <Card key={test.id}>
+                      <CardHeader>
+                        <CardTitle className="text-lg">{test.title}</CardTitle>
+                        <CardDescription>Test {idx + 1}</CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-2">
-                        <div className="text-2xl font-bold">{totalFindings}</div>
-                        <div className="text-xs text-muted-foreground">Total Findings</div>
-                        <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-                          <div>
-                            <Badge variant="destructive" className="text-xs">
-                              {counts.blocker + counts.high}
-                            </Badge>
-                            <span className="ml-1 text-muted-foreground">High/Blocker</span>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-sm text-muted-foreground">High</span>
+                            <span className="font-semibold text-red-600">
+                              {counts.high + counts.blocker}
+                            </span>
                           </div>
-                          <div>
-                            <Badge variant="default" className="text-xs">
-                              {counts.med}
-                            </Badge>
-                            <span className="ml-1 text-muted-foreground">Med</span>
+                          <div className="flex justify-between">
+                            <span className="text-sm text-muted-foreground">Med</span>
+                            <span className="font-semibold text-yellow-600">{counts.med}</span>
                           </div>
-                          <div>
-                            <Badge variant="secondary" className="text-xs">
-                              {counts.low}
-                            </Badge>
-                            <span className="ml-1 text-muted-foreground">Low</span>
-                          </div>
-                          <div className="text-muted-foreground">
-                            {run.task_completion_percentage
-                              ? `${Math.round(run.task_completion_percentage)}%`
-                              : "—"}
-                            <span className="ml-1">Complete</span>
+                          <div className="flex justify-between">
+                            <span className="text-sm text-muted-foreground">Low</span>
+                            <span className="font-semibold text-blue-600">{counts.low}</span>
                           </div>
                         </div>
                       </CardContent>
@@ -337,6 +433,60 @@ function ComparePageContent() {
                 })}
               </div>
 
+              {/* All Findings from All Tests */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>All Findings Across Tests</CardTitle>
+                  <CardDescription>
+                    {comparison.allFindings?.length || 0} total findings from {tests.length} tests
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {comparison.allFindings && comparison.allFindings.length > 0 ? (
+                      comparison.allFindings.map((finding: any, idx: number) => (
+                        <div key={idx} className="border-b pb-4 last:border-0">
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 className="font-semibold">{finding.title}</h4>
+                            <Badge
+                              variant={
+                                finding.severity === "High" || finding.severity === "Blocker"
+                                  ? "destructive"
+                                  : finding.severity === "Med"
+                                    ? "default"
+                                    : "secondary"
+                              }
+                              className={
+                                finding.severity === "Med"
+                                  ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                                  : ""
+                              }
+                            >
+                              {finding.severity}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {finding.description}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>From: {finding.testTitle}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-muted-foreground text-center py-8">
+                        No findings to display.
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        ) : isMultiRunComparison ? (
+          <>
+            {/* Multi-Run Comparison View */}
+            <div className="grid gap-4">
               {/* All Findings Across Runs */}
               <Card>
                 <CardHeader>
@@ -356,14 +506,19 @@ function ComparePageContent() {
                                 <h4 className="font-semibold">{finding.title}</h4>
                                 <Badge
                                   variant={
-                                    finding.severity === "Blocker" || finding.severity === "High"
+                                    finding.severity === "High"
                                       ? "destructive"
                                       : finding.severity === "Med"
-                                        ? "default"
+                                        ? "secondary"
                                         : "secondary"
                                   }
+                                  className={
+                                    finding.severity === "Med"
+                                      ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                                      : ""
+                                  }
                                 >
-                                  {finding.severity}
+                                  {finding.severity === "Blocker" ? "High" : finding.severity}
                                 </Badge>
                               </div>
                               <p className="text-sm text-muted-foreground mb-2">
@@ -374,11 +529,12 @@ function ComparePageContent() {
                                 {comparison.runs.map((run: any, runIdx: number) => {
                                   const runNum = runIdx + 1;
                                   const appears = finding.appearsInRuns?.has(`run${runNum}`);
+                                  if (!appears) return null;
                                   return (
                                     <Badge
                                       key={runNum}
-                                      variant={appears ? "default" : "outline"}
-                                      className="text-xs"
+                                      variant="outline"
+                                      className="text-xs bg-background border-border"
                                     >
                                       Run {runNum}
                                     </Badge>
@@ -397,36 +553,12 @@ function ComparePageContent() {
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Confusion Hotspots */}
-              {comparison.confusionHotspots && comparison.confusionHotspots.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Confusion Hotspots</CardTitle>
-                    <CardDescription>
-                      UI areas that triggered issues across multiple runs
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {comparison.confusionHotspots
-                        .sort((a: any, b: any) => b.frequency - a.frequency)
-                        .map((hotspot: any, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between p-2 border rounded">
-                            <span className="font-medium">{hotspot.area}</span>
-                            <Badge>{hotspot.frequency} occurrences</Badge>
-                          </div>
-                        ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </div>
           </>
         ) : (
           <>
             {/* Legacy 2-Test Comparison View */}
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader className="pb-3">
                   <CardDescription>Resolved</CardDescription>
@@ -457,27 +589,108 @@ function ComparePageContent() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Run Selectors (if multiple runs available) */}
+            {(testARuns.length > 1 || testBRuns.length > 1) && (
               <Card>
-                <CardHeader className="pb-3">
-                  <CardDescription>Hotspots</CardDescription>
+                <CardHeader>
+                  <CardTitle>Select Runs to Compare</CardTitle>
+                  <CardDescription>
+                    Choose which runs from each test you want to compare
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">
-                    {comparison.confusionHotspots?.length || 0}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {testARuns.length > 1 && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Test A Run</label>
+                        <Select
+                          value={selectedRunAId || runA?.id || ""}
+                          onValueChange={async (value) => {
+                            const selectedRun = testARuns.find((r) => r.id === value);
+                            if (selectedRun && runB) {
+                              setSelectedRunAId(value);
+                              setRunA(selectedRun);
+                              const result = await compareRuns(selectedRun.id, runB.id);
+                              setComparison(result);
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {testARuns.map((run) => {
+                              const date = new Date(run.created_at);
+                              const dateStr = date.toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              });
+                              return (
+                                <SelectItem key={run.id} value={run.id}>
+                                  {dateStr}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {testBRuns.length > 1 && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Test B Run</label>
+                        <Select
+                          value={selectedRunBId || runB?.id || ""}
+                          onValueChange={async (value) => {
+                            const selectedRun = testBRuns.find((r) => r.id === value);
+                            if (selectedRun && runA) {
+                              setSelectedRunBId(value);
+                              setRunB(selectedRun);
+                              const result = await compareRuns(runA.id, selectedRun.id);
+                              setComparison(result);
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {testBRuns.map((run) => {
+                              const date = new Date(run.created_at);
+                              const dateStr = date.toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              });
+                              return (
+                                <SelectItem key={run.id} value={run.id}>
+                                  {dateStr}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
-            </div>
+            )}
 
             {/* Findings Comparison */}
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
                 <CardHeader>
-                  <CardTitle>Run A Findings</CardTitle>
+                  <CardTitle>
+                    {testA?.title ? `${testA.title} Findings` : "Test A Findings"}
+                  </CardTitle>
                   <CardDescription>
                     {comparison.findingCounts?.a
-                      ? comparison.findingCounts.a.blocker +
-                        comparison.findingCounts.a.high +
+                      ? comparison.findingCounts.a.high +
                         comparison.findingCounts.a.med +
                         comparison.findingCounts.a.low
                       : 0}{" "}
@@ -485,28 +698,23 @@ function ComparePageContent() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>Blocker:</span>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">High:</span>
                       <Badge variant="destructive">
-                        {comparison.findingCounts?.a?.blocker || 0}
+                        {(comparison.findingCounts?.a?.blocker || 0) +
+                          (comparison.findingCounts?.a?.high || 0)}
                       </Badge>
                     </div>
-                    <div className="flex justify-between">
-                      <span>High:</span>
-                      <Badge variant="destructive">
-                        {comparison.findingCounts?.a?.high || 0}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Med:</span>
+                      <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">
+                        {comparison.findingCounts?.a?.med || 0}
                       </Badge>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Med:</span>
-                      <Badge>{comparison.findingCounts?.a?.med || 0}</Badge>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Low:</span>
-                      <Badge variant="secondary">
-                        {comparison.findingCounts?.a?.low || 0}
-                      </Badge>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Low:</span>
+                      <Badge variant="secondary">{comparison.findingCounts?.a?.low || 0}</Badge>
                     </div>
                   </div>
                 </CardContent>
@@ -514,11 +722,12 @@ function ComparePageContent() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Run B Findings</CardTitle>
+                  <CardTitle>
+                    {testB?.title ? `${testB.title} Findings` : "Test B Findings"}
+                  </CardTitle>
                   <CardDescription>
                     {comparison.findingCounts?.b
-                      ? comparison.findingCounts.b.blocker +
-                        comparison.findingCounts.b.high +
+                      ? comparison.findingCounts.b.high +
                         comparison.findingCounts.b.med +
                         comparison.findingCounts.b.low
                       : 0}{" "}
@@ -526,136 +735,121 @@ function ComparePageContent() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>Blocker:</span>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">High:</span>
                       <Badge variant="destructive">
-                        {comparison.findingCounts?.b?.blocker || 0}
+                        {(comparison.findingCounts?.b?.blocker || 0) +
+                          (comparison.findingCounts?.b?.high || 0)}
                       </Badge>
                     </div>
-                    <div className="flex justify-between">
-                      <span>High:</span>
-                      <Badge variant="destructive">
-                        {comparison.findingCounts?.b?.high || 0}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Med:</span>
+                      <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">
+                        {comparison.findingCounts?.b?.med || 0}
                       </Badge>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Med:</span>
-                      <Badge>{comparison.findingCounts?.b?.med || 0}</Badge>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Low:</span>
-                      <Badge variant="secondary">
-                        {comparison.findingCounts?.b?.low || 0}
-                      </Badge>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Low:</span>
+                      <Badge variant="secondary">{comparison.findingCounts?.b?.low || 0}</Badge>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-        {/* Resolved Findings */}
-        {comparison.resolved.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                Resolved Findings ({comparison.resolved.length})
-              </CardTitle>
-              <CardDescription>Issues that were in Run A but not in Run B</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {comparison.resolved.map((finding: any, idx: number) => (
-                <div key={idx} className="p-4 border rounded-lg">
-                  <div className="font-semibold">{finding.title}</div>
-                  <div className="text-sm text-muted-foreground mt-1">{finding.description}</div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* New Findings */}
-        {comparison.newFindings.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-red-600" />
-                New Findings ({comparison.newFindings.length})
-              </CardTitle>
-              <CardDescription>Issues that appeared in Run B but not in Run A</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {comparison.newFindings.map((finding: any, idx: number) => (
-                <div key={idx} className="p-4 border rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-semibold">{finding.title}</div>
-                    <Badge variant={finding.severity === "High" || finding.severity === "Blocker" ? "destructive" : "secondary"}>
-                      {finding.severity}
-                    </Badge>
-                  </div>
-                  <div className="text-sm text-muted-foreground">{finding.description}</div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Regressions */}
-        {comparison.regressions.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingDown className="h-5 w-5 text-orange-600" />
-                Regressions ({comparison.regressions.length})
-              </CardTitle>
-              <CardDescription>Issues that got worse in Run B</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {comparison.regressions.map((regression: any, idx: number) => (
-                <div key={idx} className="p-4 border rounded-lg border-orange-200">
-                  <div className="font-semibold">{regression.finding.title}</div>
-                  <div className="text-sm text-muted-foreground mt-1">{regression.finding.description}</div>
-                  <div className="flex items-center gap-4 mt-2 text-sm">
-                    <span>Severity: {regression.severityChange}</span>
-                    {regression.frequencyChange && (
-                      <span>Frequency: {regression.frequencyChange}</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Confusion Hotspots */}
-        {comparison.confusionHotspots.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Confusion Hotspots</CardTitle>
-              <CardDescription>UI areas with the most issues</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {comparison.confusionHotspots.map((hotspot: any, idx: number) => (
-                <div key={idx} className="p-4 border rounded-lg">
-                  <div className="font-semibold">{hotspot.area}</div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    {hotspot.issueCount} issue{hotspot.issueCount !== 1 ? "s" : ""}
-                  </div>
-                  {hotspot.elements && hotspot.elements.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {hotspot.elements.map((elem: string, eIdx: number) => (
-                        <Badge key={eIdx} variant="outline" className="text-xs">
-                          {elem}
-                        </Badge>
-                      ))}
+            {/* Resolved Findings */}
+            {comparison.resolved.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    Resolved Findings ({comparison.resolved.length})
+                  </CardTitle>
+                  <CardDescription>
+                    Issues that were in {testA ? `"${testA.title}"` : "Test A"} but not in{" "}
+                    {testB ? `"${testB.title}"` : "Test B"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {comparison.resolved.map((finding: any, idx: number) => (
+                    <div key={idx} className="p-4 border rounded-lg">
+                      <div className="font-semibold">{finding.title}</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        {finding.description}
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* New Findings */}
+            {comparison.newFindings.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5 text-red-600" />
+                    New Findings ({comparison.newFindings.length})
+                  </CardTitle>
+                  <CardDescription>
+                    Issues that appeared in {testB ? `"${testB.title}"` : "Test B"} but not in{" "}
+                    {testA ? `"${testA.title}"` : "Test A"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {comparison.newFindings.map((finding: any, idx: number) => (
+                    <div key={idx} className="p-4 border rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-semibold">{finding.title}</div>
+                        <Badge
+                          variant={finding.severity === "High" ? "destructive" : "secondary"}
+                          className={
+                            finding.severity === "Med"
+                              ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                              : finding.severity === "Blocker"
+                                ? "bg-red-600 hover:bg-red-700 text-white"
+                                : ""
+                          }
+                        >
+                          {finding.severity === "Blocker" ? "High" : finding.severity}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">{finding.description}</div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Regressions */}
+            {comparison.regressions.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingDown className="h-5 w-5 text-orange-600" />
+                    Regressions ({comparison.regressions.length})
+                  </CardTitle>
+                  <CardDescription>Issues that got worse in Run B</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {comparison.regressions.map((regression: any, idx: number) => (
+                    <div key={idx} className="p-4 border rounded-lg border-orange-200">
+                      <div className="font-semibold">{regression.finding.title}</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        {regression.finding.description}
+                      </div>
+                      <div className="flex items-center gap-4 mt-2 text-sm">
+                        <span>Severity: {regression.severityChange}</span>
+                        {regression.frequencyChange && (
+                          <span>Frequency: {regression.frequencyChange}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>
@@ -665,17 +859,18 @@ function ComparePageContent() {
 
 export default function ComparePage() {
   return (
-    <Suspense fallback={
-      <AppLayout>
-        <div className="container mx-auto p-6">
-          <div className="flex items-center justify-center h-64">
-            <p>Loading comparison...</p>
+    <Suspense
+      fallback={
+        <AppLayout>
+          <div className="container mx-auto p-6">
+            <div className="flex items-center justify-center h-64">
+              <p>Loading comparison...</p>
+            </div>
           </div>
-        </div>
-      </AppLayout>
-    }>
+        </AppLayout>
+      }
+    >
       <ComparePageContent />
     </Suspense>
   );
 }
-

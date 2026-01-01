@@ -17,6 +17,8 @@ export async function POST(req: Request) {
     const totalTasks = tasks.length;
     let systemPrompt = `You are a helpful assistant that will simulate UI/UX usability testing. You will be given two functions that link to a FastAPI backend endpoint for clicking and receiving a screenshot of the screen. Using those two tools, you will attempt to complete the tasks given to you by navigating the Figma UI via those two endpoints. 
 
+      **TEST GOAL:** ${goal || "Evaluate the usability and effectiveness of the design"}
+
       **YOUR PRIMARY GOAL:** Complete ALL ${totalTasks} tasks listed below:
       ${tasks.map((t: string, i: number) => `${i + 1}. ${t}`).join("\n")}
 

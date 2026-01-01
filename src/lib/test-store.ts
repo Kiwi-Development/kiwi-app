@@ -15,7 +15,6 @@ type Test = {
     goal: string;
     selectedPersona: string;
     runCount?: number;
-    useCase: string;
     tasks: string[];
     figmaUrlA?: string;
     figmaUrlB?: string;

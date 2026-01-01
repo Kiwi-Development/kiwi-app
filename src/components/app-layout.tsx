@@ -38,7 +38,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </div>
 
       {/* Desktop sidebar */}
-      <div className="hidden md:flex print:hidden">
+      <div className="hidden md:flex print:hidden w-72">
         <AppSidebar />
       </div>
 

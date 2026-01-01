@@ -456,6 +456,7 @@ export default function LiveRunPage() {
               : null,
             currentProgress: runCurrentProgress,
             runIndex: runIndex, // Pass run index for variation
+            goal: test.testData?.goal || "", // Pass the test goal
           }),
         });
 
@@ -1339,6 +1340,7 @@ export default function LiveRunPage() {
         if (!simulationRef.current) break;
         if (activeExecutionIdRef.current !== executionId) break;
 
+        const test = await testStore.getTestById(testId);
         const decideRes = await fetch(`/dashboard/runs/${testId}/api`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1349,6 +1351,7 @@ export default function LiveRunPage() {
             persona: stateRef.current.personas[0],
             runIndex: 0, // Main simulation is run 0
             currentProgress,
+            goal: test?.testData?.goal || "", // Pass the test goal
           }),
         });
 
