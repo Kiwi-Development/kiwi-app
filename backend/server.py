@@ -99,14 +99,32 @@ class FigmaMetadataRequest(BaseModel):
     url: str
     apiToken: Optional[str] = None
 
+@app.get("/")
+async def root():
+    """Root endpoint - redirects to health check"""
+    try:
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "service": "kiwi-backend",
+            "message": "Kiwi Backend API is running. Use /health for health checks."
+        }
+    except Exception as e:
+        logger.error(f"Error in root endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
 @app.get("/health")
 async def health():
     """Basic health check"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "service": "kiwi-backend"
-    }
+    try:
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "service": "kiwi-backend"
+        }
+    except Exception as e:
+        logger.error(f"Error in health endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/health/ready")
 async def readiness():
