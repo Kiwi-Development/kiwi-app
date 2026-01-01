@@ -1,67 +1,141 @@
 "use server";
 
-// Determine protocol and URL format based on environment
-// Local development uses http with port, production (Render) uses https without port
-const host = process.env.NEXT_PUBLIC_EC2_IP || "localhost";
-const isLocalhost = !host || host === "localhost" || host.startsWith("127.0.0.1");
+// Helper function to get BASE_URL (called at runtime, not module load time)
+function getBaseUrl(): string {
+  const host = process.env.NEXT_PUBLIC_EC2_IP || "localhost";
+  const isLocalhost = !host || host === "localhost" || host.startsWith("127.0.0.1");
 
-let BASE_URL: string;
-if (isLocalhost) {
-  // Local development: http://localhost:5001
-  const port = process.env.NEXT_PUBLIC_BACKEND_PORT || "5001";
-  BASE_URL = `http://${host}:${port}`;
-} else {
-  // Production (Render): https://kiwi-backend.onrender.com (no port needed)
-  BASE_URL = `https://${host}`;
+  if (isLocalhost) {
+    // Local development: http://localhost:5001
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || "5001";
+    return `http://${host}:${port}`;
+  } else {
+    // Production (Render): https://kiwi-backend.onrender.com (no port needed)
+    // Ensure host doesn't already have https://
+    const cleanHost = host.replace(/^https?:\/\//, "");
+    return `https://${cleanHost}`;
+  }
 }
 
-// Debug: Log the backend URL being used
-if (typeof window === "undefined") {
-  console.log(`[Proxy] Backend URL configured: ${BASE_URL}`);
-}
+export async function startSession(url: string, retryCount = 0): Promise<any> {
+  const BASE_URL = getBaseUrl();
+  const backendUrl = `${BASE_URL}/start`;
+  const maxRetries = 1; // Retry once for cold start
 
-export async function startSession(url: string) {
+  console.log(
+    `[Proxy] Starting session (attempt ${retryCount + 1}/${maxRetries + 1}) - URL: ${backendUrl}, Target: ${url}`
+  );
+  console.log(
+    `[Proxy] Environment - NEXT_PUBLIC_EC2_IP: ${process.env.NEXT_PUBLIC_EC2_IP}, NEXT_PUBLIC_BACKEND_PORT: ${process.env.NEXT_PUBLIC_BACKEND_PORT}`
+  );
+
   try {
-    const backendUrl = `${BASE_URL}/start`;
-    const res = await fetch(backendUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-      cache: "no-store",
-    });
+    const controller = new AbortController();
+    // Timeout: 120 seconds (Starter tier has no cold starts, but Playwright operations can take time)
+    const timeout = 120000;
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    if (!res.ok) {
-      const text = await res.text();
-      const errorMessage = `Backend request failed: ${res.status} ${res.statusText}. URL: ${backendUrl}. Response: ${text}`;
-      throw new Error(errorMessage);
+    try {
+      const res = await fetch(backendUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const text = await res.text();
+        const errorMessage = `Backend request failed: ${res.status} ${res.statusText}. URL: ${backendUrl}. Response: ${text}`;
+        console.error(`[Proxy] ${errorMessage}`);
+
+        // Retry on 5xx errors (might be cold start issue)
+        if (res.status >= 500 && retryCount < maxRetries) {
+          console.log(`[Proxy] Retrying after server error (cold start?)...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          return startSession(url, retryCount + 1);
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const data = await res.json();
+      console.log(`[Proxy] Session started successfully: ${data.sessionId}`);
+      return data;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === "AbortError") {
+        // Retry on timeout (transient network issues)
+        if (retryCount < maxRetries) {
+          console.log(`[Proxy] Request timed out, retrying...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          return startSession(url, retryCount + 1);
+        }
+        const errorMsg = `Request to backend timed out after ${timeout / 1000} seconds. URL: ${backendUrl}`;
+        console.error(`[Proxy] ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      // Retry on network errors (transient connectivity issues)
+      if (retryCount < maxRetries && fetchError instanceof Error) {
+        const isNetworkError =
+          fetchError.message.includes("fetch failed") ||
+          fetchError.message.includes("network") ||
+          fetchError.message.includes("ECONNREFUSED");
+
+        if (isNetworkError) {
+          console.log(`[Proxy] Network error, retrying...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          return startSession(url, retryCount + 1);
+        }
+      }
+
+      console.error(`[Proxy] Fetch error:`, fetchError);
+      throw fetchError;
     }
-
-    return await res.json();
   } catch (error) {
     // Provide more detailed error information
     const errorMessage =
       error instanceof Error
         ? `Failed to connect to backend at ${BASE_URL}: ${error.message}`
         : `Failed to connect to backend at ${BASE_URL}: Unknown error`;
+    console.error(`[Proxy] ${errorMessage}`);
     throw new Error(errorMessage);
   }
 }
 
 export async function proxyClick(sessionId: string, x: number, y: number) {
+  const BASE_URL = getBaseUrl();
   console.log(`[Proxy] Clicking at ${x},${y} for session ${sessionId}`);
   try {
-    const res = await fetch(`${BASE_URL}/click`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, x, y }),
-      cache: "no-store",
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    if (!res.ok) {
-      throw new Error(`Failed to click: ${res.status}`);
+    try {
+      const res = await fetch(`${BASE_URL}/click`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, x, y }),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        throw new Error(`Failed to click: ${res.status}`);
+      }
+
+      return await res.json();
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === "AbortError") {
+        throw new Error(`Click request timed out after 30 seconds`);
+      }
+      throw fetchError;
     }
-
-    return await res.json();
   } catch (error) {
     console.error("[Proxy] Click error:", error);
     const message = error instanceof Error ? error.message : "Failed to click";
@@ -70,25 +144,43 @@ export async function proxyClick(sessionId: string, x: number, y: number) {
 }
 
 export async function proxyScreenshot(sessionId: string) {
+  const BASE_URL = getBaseUrl();
   try {
     // console.log(`[Proxy] Fetching screenshot for session ${sessionId}`)
-    const res = await fetch(`${BASE_URL}/screenshot`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId }),
-      cache: "no-store",
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    if (!res.ok) {
-      // If 404 or other error, return error status but don't throw to avoid crashing loop
-      return {
-        status: "error",
-        message: `Failed to get screenshot: ${res.status}`,
-      };
+    try {
+      const res = await fetch(`${BASE_URL}/screenshot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        // If 404 or other error, return error status but don't throw to avoid crashing loop
+        return {
+          status: "error",
+          message: `Failed to get screenshot: ${res.status}`,
+        };
+      }
+
+      const data = await res.json();
+      return { status: "ok", screenshot: data.screenshot };
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === "AbortError") {
+        return {
+          status: "error",
+          message: "Screenshot request timed out after 30 seconds",
+        };
+      }
+      throw fetchError;
     }
-
-    const data = await res.json();
-    return { status: "ok", screenshot: data.screenshot };
   } catch (error) {
     console.error("[Proxy] Screenshot error:", error);
     const message = error instanceof Error ? error.message : "Failed to get screenshot";
@@ -100,6 +192,7 @@ export async function proxyScreenshot(sessionId: string) {
 }
 
 export async function extractContext(sessionId: string) {
+  const BASE_URL = getBaseUrl();
   try {
     const res = await fetch(`${BASE_URL}/extract-context`, {
       method: "POST",
@@ -133,6 +226,7 @@ export async function extractContext(sessionId: string) {
 }
 
 export async function fetchFigmaMetadata(url: string, apiToken?: string) {
+  const BASE_URL = getBaseUrl();
   try {
     const res = await fetch(`${BASE_URL}/figma-metadata`, {
       method: "POST",

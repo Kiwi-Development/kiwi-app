@@ -7,7 +7,8 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { screenshot, tasks, history, persona, currentProgress, runIndex, goal } = await req.json();
+    const { screenshot, tasks, history, persona, currentProgress, runIndex, goal } =
+      await req.json();
 
     if (!screenshot) {
       return NextResponse.json({ error: "Screenshot is required" }, { status: 400 });
@@ -117,11 +118,12 @@ export async function POST(req: Request) {
     // Add variation based on run index to make each run produce different findings
     // Temperature ranges from 0.7 (more focused) to 1.0 (more creative) based on run index
     const temperature = runIndex !== undefined ? 0.7 + (runIndex % 3) * 0.1 : 0.8;
-    
+
     // Add run-specific context to prompt for variation
-    const runContext = runIndex !== undefined 
-      ? `\n\n**NOTE: This is run ${runIndex + 1} of multiple runs. Your behavior and findings should reflect natural variation - different users may notice different issues or approach tasks differently. Be authentic to this specific run's experience.**`
-      : '';
+    const runContext =
+      runIndex !== undefined
+        ? `\n\n**NOTE: This is run ${runIndex + 1} of multiple runs. Your behavior and findings should reflect natural variation - different users may notice different issues or approach tasks differently. Be authentic to this specific run's experience.**`
+        : "";
 
     // Update system prompt with run context
     if (runContext) {
@@ -184,8 +186,7 @@ export async function POST(req: Request) {
               properties: {
                 taskCompletionPercentage: {
                   type: "number",
-                  description:
-                    `Percentage of tasks successfully completed (0-100). Calculate as: (number of tasks you actually completed / ${totalTasks}) * 100. Be honest - if you completed 0 tasks, report 0. If you completed all ${totalTasks} tasks, report 100. Base this ONLY on actual task completion, not attempts or progress.`,
+                  description: `Percentage of tasks successfully completed (0-100). Calculate as: (number of tasks you actually completed / ${totalTasks}) * 100. Be honest - if you completed 0 tasks, report 0. If you completed all ${totalTasks} tasks, report 100. Base this ONLY on actual task completion, not attempts or progress.`,
                 },
                 findings: {
                   type: "array",
