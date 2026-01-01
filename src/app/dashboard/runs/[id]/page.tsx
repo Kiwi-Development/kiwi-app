@@ -880,13 +880,15 @@ export default function LiveRunPage() {
         }));
 
         // Start session on backend via Server Action
-        console.log(`[Run ${runIndex + 1}] About to call startSession with figmaUrl: ${figmaUrl}`);
+        // Main simulation is always run 0
+        const mainRunIndex = 0;
+        console.log(`[Main Run] About to call startSession with figmaUrl: ${figmaUrl}`);
         let startData;
         try {
           startData = await startSession(figmaUrl);
-          console.log(`[Run ${runIndex + 1}] startSession succeeded:`, startData);
+          console.log(`[Main Run] startSession succeeded:`, startData);
         } catch (error) {
-          console.error(`[Run ${runIndex + 1}] startSession failed:`, error);
+          console.error(`[Main Run] startSession failed:`, error);
           throw error;
         }
         sessionId = startData.sessionId;
