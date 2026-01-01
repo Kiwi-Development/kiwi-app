@@ -101,10 +101,27 @@ async def start_session(url: str) -> str:
     print(f"Opening new page for session {session_id} and navigating to {url}...")
     
     page = await _browser.new_page()
-    await page.goto(url, wait_until="networkidle")
+    
+    # Set longer timeout for Figma prototypes which can take time to load
+    page.set_default_timeout(120000)  # 2 minutes
+    
+    try:
+        # Try with networkidle first (more reliable for interactive content)
+        await page.goto(url, wait_until="networkidle", timeout=120000)
+    except Exception as e:
+        print(f"Navigation with networkidle timed out, trying with 'load' instead: {e}")
+        try:
+            # Fallback to 'load' which is less strict
+            await page.goto(url, wait_until="load", timeout=120000)
+        except Exception as e2:
+            print(f"Navigation with 'load' also failed, trying 'domcontentloaded': {e2}")
+            # Last resort: just wait for DOM to be ready
+            await page.goto(url, wait_until="domcontentloaded", timeout=120000)
+            # Give it a moment for any initial rendering
+            await asyncio.sleep(2)
     
     _sessions[session_id] = page
-    print(f"Session {session_id} started.")
+    print(f"Session {session_id} started successfully.")
     return session_id
 
 async def close_session(session_id: str):
