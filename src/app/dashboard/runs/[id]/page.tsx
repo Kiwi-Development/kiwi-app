@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useSearchParams, useParams, useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { AppLayout } from "../../../../components/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../../components/ui/card";
 import { Badge } from "../../../../components/ui/badge";
@@ -13,10 +13,16 @@ import { EventTimeline } from "./components/event-timeline";
 import { SideTabs } from "./components/side-tabs";
 import type { LiveRunState, RunEvent } from "../../../../lib/types";
 import { useToast } from "../../../../hooks/use-toast";
-import { testStore } from "../../../../lib/test-store";
+import { testStore, type Test } from "../../../../lib/test-store";
 import { personaStore } from "../../../../lib/persona-store";
 import { runStore } from "../../../../lib/run-store";
 import { supabase } from "../../../../lib/supabase";
+import type { ClusteredFinding } from "../../../../lib/reasoning-engine/clustering";
+import type { EvidenceSnippet } from "../../../../lib/reasoning-engine/orchestrator";
+
+type EnhancedFinding = ClusteredFinding & {
+  developerOutputs?: Record<string, unknown>;
+};
 import {
   proxyScreenshot,
   proxyClick,
@@ -41,8 +47,14 @@ const statusLabels: Record<string, string> = {
   error: "Error",
 };
 
+interface SemanticContext {
+  dom_tree: unknown | null;
+  accessibility_tree: unknown | null;
+  page_metadata: unknown | null;
+  figma_metadata: unknown | null;
+}
+
 export default function LiveRunPage() {
-  const searchParams = useSearchParams();
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -50,9 +62,8 @@ export default function LiveRunPage() {
   const [highlightedEventId, setHighlightedEventId] = useState<string>();
   const [isSimulating, setIsSimulating] = useState(false);
   const [currentScreenshot, setCurrentScreenshot] = useState<string | null>(null);
-  const [agentHistory, setAgentHistory] = useState<Array<{ role: string; content?: string }>>([]);
   const simulationRef = useRef(false);
-  const semanticContextRef = useRef<any>(null); // Store semantic context for reasoning engine
+  const semanticContextRef = useRef<SemanticContext | null>(null); // Store semantic context for reasoning engine
 
   const testId = params.id as string;
 
@@ -107,7 +118,6 @@ export default function LiveRunPage() {
     consoleTrace: [],
   });
 
-  const prevCompletedCountRef = useRef(0);
   const sessionIdRef = useRef<string | null>(null);
   const agentHistoryRef = useRef<Array<{ role: string; content?: string }>>([]);
   const startedAtRef = useRef<number>(Date.now());
@@ -138,7 +148,6 @@ export default function LiveRunPage() {
 
     if (activeRun && activeRun.state.status === "running") {
       setState(activeRun.state);
-      setAgentHistory(activeRun.agentHistory);
       agentHistoryRef.current = activeRun.agentHistory;
       sessionIdRef.current = activeRun.sessionId;
       if (activeRun.state.startedAt) {
@@ -265,7 +274,8 @@ export default function LiveRunPage() {
     return () => {
       simulationRef.current = false;
     };
-  }, [testId, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testId]);
 
   const stateRef = useRef(state);
 
@@ -303,7 +313,7 @@ export default function LiveRunPage() {
     testId: string,
     figmaUrl: string,
     tasks: string[],
-    test: any,
+    test: Test | null,
     personaVersionId: string,
     runIndex: number
   ) => {
@@ -338,7 +348,7 @@ export default function LiveRunPage() {
             serverReady = true;
             break;
           }
-        } catch (e) {
+        } catch {
           // Continue waiting
         }
       }
@@ -348,8 +358,14 @@ export default function LiveRunPage() {
       }
 
       // Get persona data from database to get variant and description
-      let selectedPersonaData: any = null;
-      if (test.testData?.selectedPersona) {
+      let selectedPersonaData: {
+        id: string;
+        name: string;
+        role: string | null;
+        variant: string | null;
+        attributes: Record<string, unknown> | null;
+      } | null = null;
+      if (test?.testData?.selectedPersona) {
         const { data: personaData } = await supabase
           .from("personas")
           .select("id, name, role, variant, attributes")
@@ -361,7 +377,7 @@ export default function LiveRunPage() {
       // Initialize state for this run
       const runState: LiveRunState = {
         runId: testRunId,
-        title: test.title,
+        title: test?.title || "Test Run",
         status: "running",
         startedAt: Date.now(),
         personas: selectedPersonaData
@@ -382,7 +398,7 @@ export default function LiveRunPage() {
         consoleTrace: [],
       };
 
-      const runSemanticContext: any = {
+      const runSemanticContext: SemanticContext = {
         dom_tree: null,
         accessibility_tree: null,
         page_metadata: null,
@@ -396,12 +412,12 @@ export default function LiveRunPage() {
           if (figmaMeta.status === "ok" && figmaMeta.metadata) {
             runSemanticContext.figma_metadata = figmaMeta.metadata;
           }
-        } catch (error) {
+        } catch {
           console.log(`[Run ${runIndex + 1}] Figma metadata not available`);
         }
       }
 
-      const runAgentHistory: Array<{ role: string; content?: string; tool_calls?: any }> = [];
+      const runAgentHistory: Array<{ role: string; content?: string; tool_calls?: unknown }> = [];
       const runClickHistory: Array<{
         x: number;
         y: number;
@@ -434,7 +450,7 @@ export default function LiveRunPage() {
             if (contextData.status === "ok" && contextData.context) {
               Object.assign(runSemanticContext, contextData.context);
             }
-          } catch (error) {
+          } catch {
             // Continue without context
           }
         }
@@ -464,7 +480,7 @@ export default function LiveRunPage() {
               : null,
             currentProgress: runCurrentProgress,
             runIndex: runIndex, // Pass run index for variation
-            goal: test.testData?.goal || "", // Pass the test goal
+            goal: test?.testData?.goal || "", // Pass the test goal
           }),
         });
 
@@ -596,7 +612,7 @@ export default function LiveRunPage() {
                 const { clusterFindings } =
                   await import("../../../../lib/reasoning-engine/clustering");
 
-                enhancedFindings = enhancedFindings.map((finding: any) => {
+                enhancedFindings = enhancedFindings.map((finding: EnhancedFinding) => {
                   const taskContext = finding.affectingTasks?.[0] || "General task";
                   const evidence = extractEvidenceFromRun(
                     runState.events,
@@ -673,7 +689,7 @@ export default function LiveRunPage() {
 
               // Save feedback entries
               if (enhancedFindings && enhancedFindings.length > 0) {
-                const feedbackEntries = enhancedFindings.map((finding: any) => {
+                const feedbackEntries = enhancedFindings.map((finding: EnhancedFinding) => {
                   let severity = "Low";
                   const severityLower = finding.severity?.toLowerCase() || "low";
                   if (severityLower === "blocker") {
@@ -730,9 +746,9 @@ export default function LiveRunPage() {
 
           runAgentHistory.push({
             role: "assistant",
-            content: null,
+            content: undefined,
             tool_calls: decision.tool_calls,
-          } as any);
+          });
           runAgentHistory.push(...toolOutputs);
 
           if (shouldStop) {
@@ -745,7 +761,7 @@ export default function LiveRunPage() {
       }
 
       console.log(`[Run ${runIndex + 1}] Simulation completed for test_run ${testRunId}`);
-    } catch (error: any) {
+    } catch (error) {
       console.error(`[Run ${runIndex + 1}] Simulation error:`, error);
       // Update test_run to error status
       await runStore.updateTestRun(testRunId, {
@@ -789,7 +805,7 @@ export default function LiveRunPage() {
         if (figmaMeta.status === "ok" && figmaMeta.metadata) {
           semanticContextRef.current.figma_metadata = figmaMeta.metadata;
         }
-      } catch (error) {
+      } catch {
         console.log("Figma metadata not available, using DOM/A11y extraction");
       }
     }
@@ -805,12 +821,11 @@ export default function LiveRunPage() {
       return;
     }
 
-    let serverUrl: string;
     let sessionId: string;
 
     // Get persona version ID for creating test_run records
     let personaVersionId: string | null = null;
-    let testRunIds: string[] = [];
+    const testRunIds: string[] = [];
     if (!isResuming && test?.testData?.selectedPersona) {
       const { data: personaData } = await supabase
         .from("personas")
@@ -828,7 +843,7 @@ export default function LiveRunPage() {
             testRunIds.push(testRunId);
             if (i === 0) {
               // Store first test_run ID for this run (for UI display)
-              (window as any).__currentTestRunId = testRunId;
+              (window as Window & { __currentTestRunId?: string }).__currentTestRunId = testRunId;
             }
           }
         }
@@ -881,7 +896,6 @@ export default function LiveRunPage() {
 
         // Start session on backend via Server Action
         // Main simulation is always run 0
-        const mainRunIndex = 0;
         console.log(`[Main Run] About to call startSession with figmaUrl: ${figmaUrl}`);
         let startData;
         try {
@@ -895,8 +909,10 @@ export default function LiveRunPage() {
         sessionIdRef.current = sessionId;
 
         // Update first test_run to 'running' if we created it upfront
-        if (personaVersionId && (window as any).__currentTestRunId) {
-          await runStore.updateTestRun((window as any).__currentTestRunId, {
+        const currentTestRunId = (window as Window & { __currentTestRunId?: string })
+          .__currentTestRunId;
+        if (personaVersionId && currentTestRunId) {
+          await runStore.updateTestRun(currentTestRunId, {
             status: "running",
             started_at: new Date().toISOString(),
           });
@@ -936,7 +952,7 @@ export default function LiveRunPage() {
               serverReady = true;
               break;
             }
-          } catch (e) {
+          } catch {
             // Server not ready yet, continue waiting
           }
         }
@@ -1125,10 +1141,12 @@ export default function LiveRunPage() {
           const stateWithContext = {
             ...stateWithFindings,
             semanticContext: semanticContextRef.current, // Include semantic context
-          } as LiveRunState & { semanticContext?: any };
+          } as LiveRunState & { semanticContext?: SemanticContext };
 
           // Use existing test_run ID if we created it upfront, otherwise create new one
-          let testRunId = (window as any).__currentTestRunId;
+          let testRunId: string | null | undefined = (
+            window as Window & { __currentTestRunId?: string }
+          ).__currentTestRunId;
           if (!testRunId) {
             testRunId = await runStore.saveCompletedRun(
               testId,
@@ -1189,57 +1207,59 @@ export default function LiveRunPage() {
             findingsRef.current?.findings &&
             findingsRef.current.findings.length > 0
           ) {
-            const feedbackEntries = findingsRef.current.findings.map((finding: any) => {
-              // Map severity to enum values: 'Blocker', 'High', 'Med', 'Low'
-              let severity = "Low";
-              const severityLower = finding.severity?.toLowerCase() || "low";
-              if (severityLower === "blocker") {
-                severity = "Blocker";
-              } else if (severityLower === "high") {
-                severity = "High";
-              } else if (severityLower === "med" || severityLower === "medium") {
-                severity = "Med";
-              } else {
-                severity = "Low";
+            const feedbackEntries = (findingsRef.current.findings as EnhancedFinding[]).map(
+              (finding) => {
+                // Map severity to enum values: 'Blocker', 'High', 'Med', 'Low'
+                let severity = "Low";
+                const severityLower = finding.severity?.toLowerCase() || "low";
+                if (severityLower === "blocker") {
+                  severity = "Blocker";
+                } else if (severityLower === "high") {
+                  severity = "High";
+                } else if (severityLower === "med" || severityLower === "medium") {
+                  severity = "Med";
+                } else {
+                  severity = "Low";
+                }
+
+                // Extract citations and developer outputs from enhanced findings
+                const citations = finding.citations || [];
+                const developerOutputs = finding.developerOutputs || {};
+
+                // Get evidence snippets, frequency, and triggered by info from clustered finding
+                const evidenceSnippets = finding.evidence_snippets || [];
+                const frequency = finding.frequency || 1;
+                const triggeredByTasks = finding.triggered_by_tasks || finding.affectingTasks || [];
+                const triggeredByPersonas = finding.triggered_by_personas || [];
+
+                console.log(
+                  `[Save] Finding "${finding.title}" has ${evidenceSnippets.length} evidence snippets:`,
+                  evidenceSnippets
+                );
+
+                return {
+                  test_run_id: testRunId,
+                  persona_version_id: personaVersionId,
+                  title: finding.title || "Untitled Finding",
+                  severity: severity,
+                  confidence: finding.confidence ?? 0,
+                  confidence_level:
+                    finding.confidence_level ||
+                    (finding.confidence >= 70 ? "High" : finding.confidence >= 40 ? "Med" : "Low"),
+                  category: finding.category || "other",
+                  description: finding.description || "",
+                  suggested_fix: finding.suggestedFix || null,
+                  affecting_tasks: finding.affectingTasks || [],
+                  evidence_snippets: evidenceSnippets.length > 0 ? evidenceSnippets : null,
+                  frequency: frequency,
+                  triggered_by_tasks: triggeredByTasks,
+                  triggered_by_personas: triggeredByPersonas,
+                  knowledge_citations: citations.length > 0 ? citations : null,
+                  developer_outputs:
+                    Object.keys(developerOutputs).length > 0 ? developerOutputs : null,
+                };
               }
-
-              // Extract citations and developer outputs from enhanced findings
-              const citations = finding.citations || [];
-              const developerOutputs = finding.developerOutputs || {};
-
-              // Get evidence snippets, frequency, and triggered by info from clustered finding
-              const evidenceSnippets = finding.evidence_snippets || [];
-              const frequency = finding.frequency || 1;
-              const triggeredByTasks = finding.triggered_by_tasks || finding.affectingTasks || [];
-              const triggeredByPersonas = finding.triggered_by_personas || [];
-
-              console.log(
-                `[Save] Finding "${finding.title}" has ${evidenceSnippets.length} evidence snippets:`,
-                evidenceSnippets
-              );
-
-              return {
-                test_run_id: testRunId,
-                persona_version_id: personaVersionId,
-                title: finding.title || "Untitled Finding",
-                severity: severity,
-                confidence: finding.confidence ?? 0,
-                confidence_level:
-                  finding.confidence_level ||
-                  (finding.confidence >= 70 ? "High" : finding.confidence >= 40 ? "Med" : "Low"),
-                category: finding.category || "other",
-                description: finding.description || "",
-                suggested_fix: finding.suggestedFix || null,
-                affecting_tasks: finding.affectingTasks || [],
-                evidence_snippets: evidenceSnippets.length > 0 ? evidenceSnippets : null,
-                frequency: frequency,
-                triggered_by_tasks: triggeredByTasks,
-                triggered_by_personas: triggeredByPersonas,
-                knowledge_citations: citations.length > 0 ? citations : null,
-                developer_outputs:
-                  Object.keys(developerOutputs).length > 0 ? developerOutputs : null,
-              };
-            });
+            );
 
             console.log("Inserting feedback entries:", feedbackEntries.length);
             const { error: feedbackError } = await supabase
@@ -1305,7 +1325,6 @@ export default function LiveRunPage() {
     const clickHistory: Array<{ x: number; y: number; timestamp: number; screenshot: string }> = [];
     const MAX_CLICK_HISTORY = 10; // Keep last 10 clicks
     const CLICK_LOOP_THRESHOLD = 3; // If same location clicked 3+ times with no change, warn
-    const SCREENSHOT_CHANGE_THRESHOLD = 0.95; // 95% similarity = no change
 
     try {
       while (simulationRef.current && currentProgress < 100) {
@@ -1334,12 +1353,17 @@ export default function LiveRunPage() {
 
         // Extract semantic context periodically (every 5th screenshot to avoid overhead)
         // This will be used by the reasoning engine when findings are submitted
-        if (Math.random() < 0.2 || !semanticContextRef.current.dom_tree) {
+        if (Math.random() < 0.2 || !semanticContextRef.current?.dom_tree) {
           try {
             const contextData = await extractContext(sessionId);
             if (contextData.status === "ok" && contextData.context) {
               semanticContextRef.current = {
-                ...semanticContextRef.current,
+                ...(semanticContextRef.current || {
+                  dom_tree: null,
+                  accessibility_tree: null,
+                  page_metadata: null,
+                  figma_metadata: null,
+                }),
                 ...contextData.context,
               };
             }
@@ -1534,7 +1558,7 @@ export default function LiveRunPage() {
 
               // Enhance findings using reasoning engine (if enabled)
               let enhancedFindings = findings;
-              const evidenceMap = new Map<string, any[]>(); // Declare outside try block for catch access
+              const evidenceMap = new Map<string, EvidenceSnippet[]>(); // Declare outside try block for catch access
 
               try {
                 const test = await testStore.getTestById(testId);
@@ -1544,7 +1568,12 @@ export default function LiveRunPage() {
                   : null;
 
                 // Get raw persona data from database for full details
-                let personaData: any = null;
+                let personaData: {
+                  name: string;
+                  role: string | null;
+                  variant: string | null;
+                  attributes: Record<string, unknown> | null;
+                } | null = null;
                 if (test?.testData?.selectedPersona) {
                   const { data } = await supabase
                     .from("personas")
@@ -1606,7 +1635,7 @@ export default function LiveRunPage() {
                   await import("../../../../lib/reasoning-engine/evidence-capture");
 
                 // Capture evidence for all findings
-                enhancedFindings.forEach((finding: any, idx: number) => {
+                enhancedFindings.forEach((finding: EnhancedFinding, idx: number) => {
                   // Handle both string ("Task 1") and number (1) formats for affectingTasks
                   let taskIndex: number | null = null;
                   let taskContext = "General task";
@@ -1663,7 +1692,7 @@ export default function LiveRunPage() {
                 });
 
                 // Attach evidence to findings before clustering (use title as key)
-                enhancedFindings = enhancedFindings.map((finding: any) => {
+                enhancedFindings = enhancedFindings.map((finding: EnhancedFinding) => {
                   const findingKey =
                     finding.title || `finding_${enhancedFindings.indexOf(finding)}`;
                   const evidence = evidenceMap.get(findingKey) || [];
@@ -1705,10 +1734,12 @@ export default function LiveRunPage() {
                 console.error("Error enhancing findings with reasoning engine:", error);
                 // Continue with original findings if enhancement fails, but still attach evidence if available
                 if (typeof evidenceMap !== "undefined") {
-                  enhancedFindings = enhancedFindings.map((finding: any, idx: number) => ({
-                    ...finding,
-                    evidence_snippets: evidenceMap.get(idx.toString()) || [],
-                  }));
+                  enhancedFindings = enhancedFindings.map(
+                    (finding: EnhancedFinding, idx: number) => ({
+                      ...finding,
+                      evidence_snippets: evidenceMap.get(idx.toString()) || [],
+                    })
+                  );
                 }
               }
 
@@ -1773,7 +1804,6 @@ export default function LiveRunPage() {
 
           const newHistory = [...agentHistoryRef.current, decision.message, ...toolOutputs];
           agentHistoryRef.current = newHistory;
-          setAgentHistory(newHistory);
         } else {
           // Also check content for "Done." just in case
           if (decision.content?.includes("Done.") || decision.content?.includes("Done")) {
@@ -1792,7 +1822,6 @@ export default function LiveRunPage() {
 
           const newHistory = [...agentHistoryRef.current, decision.message];
           agentHistoryRef.current = newHistory;
-          setAgentHistory(newHistory);
         }
       }
     } catch (e) {
@@ -1831,6 +1860,7 @@ export default function LiveRunPage() {
       hasStartedRef.current = true;
       runSimulation();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.status, state.personas.length]);
 
   const handleEventClick = (event: RunEvent) => {
