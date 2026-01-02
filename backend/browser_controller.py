@@ -73,7 +73,7 @@ async def start_session(url: str) -> str:
     if not _browser:
         print("Launching Browser...")
         try:
-            # Browser launch options optimized for Standard tier (1GB+ RAM)
+            # Browser launch options optimized for memory-constrained environments
             _browser = await _playwright.chromium.launch(
                 headless=True,
                 args=[
@@ -81,8 +81,16 @@ async def start_session(url: str) -> str:
                     '--disable-dev-shm-usage',  # Reduces shared memory usage
                     '--disable-gpu',  # Disable GPU (not needed in headless)
                     '--disable-extensions',  # Disable extensions
-                    '--max_old_space_size=512',  # V8 heap size: 512MB (increased for Standard tier)
-                    '--js-flags=--max-old-space-size=512',  # Additional V8 heap limit
+                    '--disable-software-rasterizer',  # Disable software rasterization
+                    '--disable-background-networking',  # Disable background networking
+                    '--disable-background-timer-throttling',  # Disable background timers
+                    '--disable-renderer-backgrounding',  # Disable renderer backgrounding
+                    '--disable-backgrounding-occluded-windows',  # Disable backgrounding
+                    '--disable-features=TranslateUI',  # Disable translation UI
+                    '--disable-ipc-flooding-protection',  # Disable IPC flooding protection
+                    '--memory-pressure-off',  # Turn off memory pressure
+                    '--max_old_space_size=256',  # V8 heap size: 256MB (reduced for memory efficiency)
+                    '--js-flags=--max-old-space-size=256',  # Additional V8 heap limit
                 ]
             )
         except Exception as e:
@@ -95,7 +103,8 @@ async def start_session(url: str) -> str:
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
                         '--disable-gpu',
-                        '--max_old_space_size=512',  # Increased for Standard tier
+                        '--disable-software-rasterizer',
+                        '--max_old_space_size=256',  # Reduced for memory efficiency
                     ]
                 )
             except Exception as e2:
@@ -105,76 +114,73 @@ async def start_session(url: str) -> str:
     session_id = str(uuid.uuid4())
     print(f"Opening new page for session {session_id} and navigating to {url}...")
     
-    page = None
+    page = await _browser.new_page()
+    
+    # Memory-optimized page settings
+    # Block heavy resources to reduce memory usage
+    async def route_handler(route):
+        resource_type = route.request.resource_type
+        # Block heavy media and fonts (fonts can be large)
+        if resource_type in ['media', 'font']:  # Block videos/audio and fonts
+            await route.abort()
+        else:
+            await route.continue_()
+    
+    await page.route('**/*', route_handler)
+    
+    # Set viewport to reasonable size to reduce memory
+    await page.set_viewport_size({"width": 1280, "height": 720})
+    
+    # Set timeout for Figma prototypes
+    page.set_default_timeout(45000)  # 45 seconds (reduced for faster failure)
+    
+    # For Figma prototypes, use 'domcontentloaded' first (fastest)
+    # Figma constantly loads resources, so 'networkidle' may never trigger
     try:
-        page = await _browser.new_page()
-        
-        # Memory-optimized page settings
-        # Block only heavy media resources (videos, large images) but allow essential resources
-        async def route_handler(route):
-            resource_type = route.request.resource_type
-            # Block only heavy media, allow everything else (including stylesheets for proper rendering)
-            if resource_type in ['media']:  # Block videos/audio only
-                await route.abort()
-            else:
-                await route.continue_()
-        
-        await page.route('**/*', route_handler)
-        
-        # Set timeout for Figma prototypes
-        page.set_default_timeout(60000)  # 1 minute (reduced from 2 minutes)
-        
-        # For Figma prototypes, use 'domcontentloaded' first (fastest)
-        # Figma constantly loads resources, so 'networkidle' may never trigger
-        try:
-            # Start with 'domcontentloaded' - fastest, good enough for Figma
-            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            # Give a brief moment for initial rendering (Figma needs this)
-            await asyncio.sleep(1)  # Reduced from 2 seconds
-        except Exception as e:
-            print(f"Navigation with domcontentloaded failed, trying 'load' instead: {e}")
-            try:
-                # Fallback to 'load' if domcontentloaded fails
-                await page.goto(url, wait_until="load", timeout=60000)
-            except Exception as e2:
-                print(f"Navigation with 'load' also failed, trying 'networkidle' as last resort: {e2}")
-                # Last resort: try networkidle (slowest, but most reliable)
-                try:
-                    await page.goto(url, wait_until="networkidle", timeout=30000)  # Shorter timeout for networkidle
-                except Exception as e3:
-                    print(f"All navigation strategies failed: {e3}")
-                    # If all fail, at least we tried - the page might still be usable
-                    # Don't raise - continue and add session anyway, page might still work
-                    pass
-        
-        # Add session to dictionary BEFORE returning (critical for race condition prevention)
-        _sessions[session_id] = page
-        print(f"Session {session_id} started successfully and added to _sessions.")
-        return session_id
+        # Start with 'domcontentloaded' - fastest, good enough for Figma
+        await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+        # Give a brief moment for initial rendering (Figma needs this)
+        await asyncio.sleep(0.5)  # Reduced to 0.5 seconds
     except Exception as e:
-        # If page was created but something else failed, clean it up
-        if page:
+        print(f"Navigation with domcontentloaded failed, trying 'load' instead: {e}")
+        try:
+            # Fallback to 'load' if domcontentloaded fails
+            await page.goto(url, wait_until="load", timeout=45000)
+        except Exception as e2:
+            print(f"Navigation with 'load' also failed, trying 'networkidle' as last resort: {e2}")
+            # Last resort: try networkidle (slowest, but most reliable)
             try:
-                await page.close()
-            except:
-                pass
-        print(f"Error starting session {session_id}: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
+                await page.goto(url, wait_until="networkidle", timeout=20000)  # Shorter timeout for networkidle
+            except Exception as e3:
+                print(f"All navigation strategies failed: {e3}")
+                # If all fail, at least we tried - the page might still be usable
+                raise
+    
+    _sessions[session_id] = page
+    print(f"Session {session_id} started successfully.")
+    return session_id
 
 async def close_session(session_id: str):
     """
-    Closes the specified browser session.
+    Closes the specified browser session and cleans up resources.
     """
     global _sessions
     page = _sessions.get(session_id)
     
     if page:
         print(f"Closing session {session_id}...")
-        await page.close()
-        del _sessions[session_id]
-        print(f"Session {session_id} closed.")
+        try:
+            # Close the page to free memory
+            if not page.is_closed():
+                await page.close()
+            # Remove from sessions dict
+            del _sessions[session_id]
+            print(f"Session {session_id} closed and cleaned up.")
+        except Exception as e:
+            print(f"Error closing session {session_id}: {e}")
+            # Still remove from dict even if close failed
+            if session_id in _sessions:
+                del _sessions[session_id]
     else:
         print(f"Session {session_id} not found or already closed.")
 
@@ -524,23 +530,23 @@ async def take_screenshot(session_id: str) -> bytes:
         # Check if page is a Figma prototype (longer timeout needed)
         is_figma = 'figma.com' in page.url
         
-        # Use longer timeout for Figma prototypes (30 seconds) vs regular pages (15 seconds)
-        timeout = 30.0 if is_figma else 15.0
+        # Use longer timeout for Figma prototypes (20 seconds) vs regular pages (10 seconds)
+        timeout = 20.0 if is_figma else 10.0
         
-        # Try to take screenshot with timeout
+        # Try to take screenshot with timeout and reduced quality for memory efficiency
         try:
             screenshot_bytes = await asyncio.wait_for(
-                page.screenshot(full_page=False),  # full_page=False is faster
+                page.screenshot(full_page=False, quality=60, type='jpeg'),  # JPEG with 60% quality for smaller size
                 timeout=timeout
             )
             return screenshot_bytes
         except asyncio.TimeoutError:
-            print(f"Warning: Screenshot timeout ({timeout}s) for session {session_id}, trying with reduced quality...")
+            print(f"Warning: Screenshot timeout ({timeout}s) for session {session_id}, trying with lower quality...")
             
-            # Retry with reduced quality/full_page=False if first attempt times out
+            # Retry with even lower quality if first attempt times out
             try:
                 screenshot_bytes = await asyncio.wait_for(
-                    page.screenshot(full_page=False, quality=75),  # Reduced quality for speed
+                    page.screenshot(full_page=False, quality=40, type='jpeg'),  # Lower quality for speed and memory
                     timeout=timeout
                 )
                 print(f"Successfully took screenshot with reduced quality for session {session_id}")

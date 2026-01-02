@@ -52,9 +52,11 @@ export function extractEvidenceFromRun(
   relevantEvents.forEach((event, idx) => {
     if (event.type === 'click') {
       // Try to get click coordinates from click history
-      const clickInfo = clickHistory?.find(c => 
-        Math.abs(c.timestamp - (event.t * 1000 || 0)) < 2000 // Within 2 seconds
-      );
+      // Match by index since events and clicks are created in sequence
+      // or use the most recent click if available
+      const clickInfo = clickHistory && clickHistory.length > 0
+        ? clickHistory[Math.min(idx, clickHistory.length - 1)]
+        : undefined;
       
       if (clickInfo) {
         whatHappenedSteps.push(

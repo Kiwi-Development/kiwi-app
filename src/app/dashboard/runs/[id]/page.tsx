@@ -336,7 +336,7 @@ export default function LiveRunPage() {
         console.error(`[LiveRunPage] startSession failed:`, error);
         throw error;
       }
-      let sessionId = startData.sessionId;
+      const sessionId = startData.sessionId;
 
       // Wait for server to be ready (optimized: check immediately, then with exponential backoff)
       let serverReady = false;
@@ -454,80 +454,17 @@ export default function LiveRunPage() {
       const DECISION_DELAY_MS = 3000;
       let lastDecisionTime = Date.now();
 
-      // Session recovery helper
-      let sessionRecoveryAttempts = 0;
-      const MAX_SESSION_RECOVERY_ATTEMPTS = 2;
-      
-      const recoverSession = async (): Promise<string | null> => {
-        if (sessionRecoveryAttempts >= MAX_SESSION_RECOVERY_ATTEMPTS) {
-          console.error(
-            `[Run ${runIndex + 1}] Max session recovery attempts reached. Cannot recover session.`
-          );
-          return null;
-        }
-        
-        sessionRecoveryAttempts++;
-        console.log(
-          `[Run ${runIndex + 1}] Attempting to recover session (attempt ${sessionRecoveryAttempts}/${MAX_SESSION_RECOVERY_ATTEMPTS})...`
-        );
-        
-        try {
-          const newStartData = await startSession(figmaUrl);
-          const newSessionId = newStartData.sessionId;
-          
-          // Wait for new session to be ready
-          let ready = false;
-          for (let i = 0; i < 5; i++) {
-            await new Promise((r) => setTimeout(r, 500 * (i + 1)));
-            const check = await proxyScreenshot(newSessionId);
-            if (check.status === "ok") {
-              ready = true;
-              break;
-            }
-          }
-          
-          if (ready) {
-            console.log(
-              `[Run ${runIndex + 1}] ✅ Session recovered successfully: ${newSessionId}`
-            );
-            return newSessionId;
-          } else {
-            console.error(
-              `[Run ${runIndex + 1}] New session created but not ready: ${newSessionId}`
-            );
-            return null;
-          }
-        } catch (error) {
-          console.error(
-            `[Run ${runIndex + 1}] Failed to recover session:`,
-            error
-          );
-          return null;
-        }
-      };
-
       while (runCurrentProgress < 100) {
         // Get screenshot
         const screenshotData = await proxyScreenshot(sessionId);
         if (screenshotData.status === "error" || !screenshotData.screenshot) {
-          // If session not found, try to recover it automatically
+          // If session not found, stop the background simulation
           if (screenshotData.code === "SESSION_NOT_FOUND") {
-            console.warn(
-              `[Run ${runIndex + 1}] Session ${sessionId} not found - attempting recovery...`
+            console.error(
+              `[Run ${runIndex + 1}] Session not found - stopping simulation:`,
+              screenshotData.message
             );
-            
-            const recoveredSessionId = await recoverSession();
-            if (recoveredSessionId) {
-              sessionId = recoveredSessionId;
-              // Continue with the loop using the new session
-              continue;
-            } else {
-              // Recovery failed - stop simulation
-              console.error(
-                `[Run ${runIndex + 1}] Session recovery failed - stopping simulation`
-              );
-              break;
-            }
+            break;
           }
 
           // If screenshot timeout, retry a few times before continuing
@@ -1645,91 +1582,23 @@ export default function LiveRunPage() {
         if (activeExecutionIdRef.current !== executionId) break;
 
         if (screenshotData.status === "error" || !screenshotData.screenshot) {
-          // If session not found, try to recover it automatically
+          // If session not found, stop the simulation loop
           if (screenshotData.code === "SESSION_NOT_FOUND") {
-            console.warn(`Session ${sessionId} not found - attempting recovery...`);
-            
+            console.error("Session not found - stopping simulation:", screenshotData.message);
             setState((prev) => ({
               ...prev,
+              status: "error",
               logs: [
                 ...prev.logs,
                 {
                   t: Date.now(),
-                  text: `⚠️ Session lost - attempting to recover...`,
+                  text: `❌ Session expired or closed: ${screenshotData.message}`,
                 },
               ],
             }));
-            
-            // Try to recover the session
-            let recoveryAttempts = 0;
-            const MAX_RECOVERY_ATTEMPTS = 2;
-            let recovered = false;
-            
-            while (recoveryAttempts < MAX_RECOVERY_ATTEMPTS && !recovered) {
-              recoveryAttempts++;
-              try {
-                const newStartData = await startSession(figmaUrl);
-                const newSessionId = newStartData.sessionId;
-                
-                // Wait for new session to be ready
-                let ready = false;
-                for (let i = 0; i < 5; i++) {
-                  await new Promise((r) => setTimeout(r, 500 * (i + 1)));
-                  const check = await proxyScreenshot(newSessionId);
-                  if (check.status === "ok") {
-                    ready = true;
-                    break;
-                  }
-                }
-                
-                if (ready) {
-                  sessionId = newSessionId;
-                  sessionIdRef.current = newSessionId;
-                  recovered = true;
-                  console.log(`✅ Session recovered successfully: ${newSessionId}`);
-                  setState((prev) => ({
-                    ...prev,
-                    logs: [
-                      ...prev.logs,
-                      {
-                        t: Date.now(),
-                        text: `✅ Session recovered - continuing simulation...`,
-                      },
-                    ],
-                  }));
-                  // Continue with the loop using the new session
-                  break;
-                }
-              } catch (error) {
-                console.error(`Recovery attempt ${recoveryAttempts} failed:`, error);
-                if (recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-                  setState((prev) => ({
-                    ...prev,
-                    status: "error",
-                    logs: [
-                      ...prev.logs,
-                      {
-                        t: Date.now(),
-                        text: `❌ Session recovery failed - stopping simulation`,
-                      },
-                    ],
-                  }));
-                  simulationRef.current = false;
-                  setIsSimulating(false);
-                  break;
-                }
-              }
-            }
-            
-            // If recovery failed, stop simulation
-            if (!recovered) {
-              simulationRef.current = false;
-              setIsSimulating(false);
-              break;
-            }
-            
-            // If recovery succeeded, continue with the loop
-            continue;
+            simulationRef.current = false;
+            setIsSimulating(false);
+            break;
           }
 
           // If screenshot timeout, retry a few times before giving up
@@ -1897,27 +1766,11 @@ export default function LiveRunPage() {
               }));
 
               // Use Server Action for click
-              try {
-                await proxyClick(sessionId, args.x, args.y);
-              } catch (clickError) {
-                console.warn("Click failed, checking if session is still valid:", clickError);
-                // Check if session is still valid
-                const checkScreenshot = await proxyScreenshot(sessionId);
-                if (checkScreenshot.code === "SESSION_NOT_FOUND") {
-                  // Session lost during click - will be handled by screenshot check below
-                }
-              }
+              await proxyClick(sessionId, args.x, args.y);
 
               // Wait a bit for the page to update, then get new screenshot to check for changes
               await new Promise((r) => setTimeout(r, 1500));
               const screenshotAfterClick = await proxyScreenshot(sessionId);
-              
-              // Check if session was lost during click
-              if (screenshotAfterClick.code === "SESSION_NOT_FOUND") {
-                // Recovery will be handled by the main screenshot check in the loop
-                // This will trigger the recovery logic we added earlier
-                continue;
-              }
               const newScreenshot = screenshotAfterClick.screenshot || screenshotBeforeClick;
 
               // Record this click in history
