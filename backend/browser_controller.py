@@ -73,25 +73,37 @@ async def start_session(url: str) -> str:
     if not _browser:
         print("Launching Browser...")
         try:
+            # Memory-optimized browser launch options
             _browser = await _playwright.chromium.launch(
                 headless=True,
                 args=[
                     '--no-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--use-gl=swiftshader',
-                    '--enable-webgl',
-                    '--ignore-gpu-blocklist',
-                    '--disable-setuid-sandbox',
-                    '--disable-gpu',
+                    '--disable-dev-shm-usage',  # Reduces shared memory usage
+                    '--disable-gpu',  # Disable GPU to save memory
+                    '--disable-software-rasterizer',  # Disable software rasterization
+                    '--disable-extensions',  # Disable extensions
+                    '--disable-background-networking',  # Disable background networking
+                    '--disable-background-timer-throttling',  # Disable background timers
+                    '--disable-renderer-backgrounding',  # Disable renderer backgrounding
+                    '--disable-backgrounding-occluded-windows',  # Disable backgrounding
+                    '--disable-ipc-flooding-protection',  # Disable IPC protection
+                    '--memory-pressure-off',  # Turn off memory pressure
+                    '--max_old_space_size=256',  # Limit V8 heap size to 256MB
+                    '--js-flags=--max-old-space-size=256',  # Additional V8 heap limit
                 ]
             )
         except Exception as e:
-            print(f"Error launching browser with full args: {e}")
+            print(f"Error launching browser with memory-optimized args: {e}")
             # Try with minimal args if first attempt fails
             try:
                 _browser = await _playwright.chromium.launch(
                     headless=True,
-                    args=['--no-sandbox', '--disable-dev-shm-usage']
+                    args=[
+                        '--no-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--max_old_space_size=256',
+                    ]
                 )
             except Exception as e2:
                 print(f"Error launching browser with minimal args: {e2}")
@@ -101,6 +113,18 @@ async def start_session(url: str) -> str:
     print(f"Opening new page for session {session_id} and navigating to {url}...")
     
     page = await _browser.new_page()
+    
+    # Memory-optimized page settings
+    # Block only heavy media resources (videos, large images) but allow essential resources
+    async def route_handler(route):
+        resource_type = route.request.resource_type
+        # Block only heavy media, allow everything else (including stylesheets for proper rendering)
+        if resource_type in ['media']:  # Block videos/audio only
+            await route.abort()
+        else:
+            await route.continue_()
+    
+    await page.route('**/*', route_handler)
     
     # Set longer timeout for Figma prototypes which can take time to load
     page.set_default_timeout(120000)  # 2 minutes

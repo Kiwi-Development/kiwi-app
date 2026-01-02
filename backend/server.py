@@ -32,11 +32,14 @@ raw_origins = os.getenv(
 # Split by comma and strip whitespace/trailing slashes
 ALLOWED_ORIGINS = [origin.strip().rstrip('/') for origin in raw_origins.split(",") if origin.strip()]
 
+# Log CORS configuration for debugging
+logger.info(f"CORS configured with allowed origins: {ALLOWED_ORIGINS}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "HEAD", "OPTIONS"],  # Explicitly include HEAD and OPTIONS for CORS
     allow_headers=["*"],
 )
 
@@ -60,9 +63,31 @@ def run_async(coro):
 # Dictionary to store session timers
 session_timers = {}
 
-def schedule_session_timeout(session_id):
-    """Schedules the browser session to close after 5 minutes."""
+# Maximum number of concurrent sessions to prevent memory issues
+# Reduced to 2 for 512MB memory limit on Render free tier
+MAX_CONCURRENT_SESSIONS = 2
+
+def cleanup_old_sessions():
+    """Closes the oldest sessions if we exceed MAX_CONCURRENT_SESSIONS."""
     global session_timers
+    import browser_controller
+    
+    if len(session_timers) > MAX_CONCURRENT_SESSIONS:
+        # Get oldest session (first in dict)
+        oldest_session = next(iter(session_timers.keys()))
+        print(f"Too many sessions ({len(session_timers)}), closing oldest: {oldest_session}")
+        if oldest_session in session_timers:
+            session_timers[oldest_session].cancel()
+        run_async(browser_controller.close_session(oldest_session))
+        if oldest_session in session_timers:
+            del session_timers[oldest_session]
+
+def schedule_session_timeout(session_id):
+    """Schedules the browser session to close after 3 minutes (reduced from 5 for memory)."""
+    global session_timers
+    
+    # Clean up old sessions if we have too many
+    cleanup_old_sessions()
     
     # Cancel existing timer if any (though for a new session ID this shouldn't happen)
     if session_id in session_timers:
@@ -74,11 +99,11 @@ def schedule_session_timeout(session_id):
         if session_id in session_timers:
             del session_timers[session_id]
         
-    # 5 minutes = 300 seconds
-    timer = threading.Timer(300, timeout_handler)
+    # 3 minutes = 180 seconds (reduced from 5 minutes to save memory)
+    timer = threading.Timer(180, timeout_handler)
     session_timers[session_id] = timer
     timer.start()
-    print(f"Scheduled session timeout for {session_id} in 5 minutes.")
+    print(f"Scheduled session timeout for {session_id} in 3 minutes.")
 
 # Pydantic models for request validation
 class StartSessionRequest(BaseModel):
@@ -100,8 +125,9 @@ class FigmaMetadataRequest(BaseModel):
     apiToken: Optional[str] = None
 
 @app.get("/")
+@app.head("/")  # Explicitly allow HEAD for Render's health check
 async def root():
-    """Root endpoint - redirects to health check"""
+    """Root endpoint - health check for Render load balancer"""
     try:
         return {
             "status": "healthy",
@@ -166,10 +192,27 @@ async def start_session(request: StartSessionRequest):
     url = request.url
     
     try:
-        print(f"Starting new session with URL: {url}")
+        # Check if we're at the session limit
+        if len(session_timers) >= MAX_CONCURRENT_SESSIONS:
+            logger.warning(f"Session limit reached ({MAX_CONCURRENT_SESSIONS}), cleaning up old sessions...")
+            cleanup_old_sessions()
+            # If still at limit after cleanup, return error
+            if len(session_timers) >= MAX_CONCURRENT_SESSIONS:
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "status": "error",
+                        "message": f"Too many concurrent sessions (max {MAX_CONCURRENT_SESSIONS}). Please wait and try again.",
+                        "code": "SESSION_LIMIT_EXCEEDED"
+                    }
+                )
+        
+        print(f"Starting new session with URL: {url} (active sessions: {len(session_timers)})")
         session_id = run_async(browser_controller.start_session(url))
         schedule_session_timeout(session_id)
         return {"status": "ok", "message": "Session started", "sessionId": session_id}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error starting session: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail={"status": "error", "message": str(e)})
