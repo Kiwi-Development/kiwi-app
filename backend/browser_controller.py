@@ -118,10 +118,15 @@ async def start_session(url: str) -> str:
     
     # Memory-optimized page settings
     # Block heavy resources to reduce memory usage
+    is_figma = 'figma.com' in url
     async def route_handler(route):
         resource_type = route.request.resource_type
-        # Block heavy media and fonts (fonts can be large)
-        if resource_type in ['media', 'font']:  # Block videos/audio and fonts
+        # Block heavy media (videos/audio)
+        # For Figma, allow fonts as they're needed for proper rendering
+        if resource_type == 'media':  # Block videos/audio only
+            await route.abort()
+        elif resource_type == 'font' and not is_figma:
+            # Block fonts for non-Figma sites to save memory
             await route.abort()
         else:
             await route.continue_()
@@ -154,61 +159,42 @@ async def start_session(url: str) -> str:
                 # If all fail, at least we tried - the page might still be usable
                 raise
     
-    # For Figma prototypes, wait for the loading screen to disappear
-    is_figma = 'figma.com' in url
+    # For Figma prototypes, wait for the iframe to load (most are cross-origin so we can't check content)
     if is_figma:
-        print(f"Waiting for Figma prototype to finish loading...")
+        print(f"Waiting for Figma prototype iframe to load...")
         try:
-            # Wait for Figma prototype iframe to load and be interactive
-            # Use wait_for_function to check if loading is complete
-            await page.wait_for_function("""
-                () => {
-                    // Check for iframes (Figma prototypes load in iframes)
-                    const iframes = document.querySelectorAll('iframe');
-                    if (iframes.length === 0) {
-                        return false; // No iframe yet
-                    }
-                    
-                    // Check if any iframe has loaded content
-                    for (const iframe of iframes) {
-                        try {
-                            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-                            if (iframeDoc && iframeDoc.body) {
-                                // Check if iframe has substantial content (not just loading screen)
-                                const body = iframeDoc.body;
-                                const hasCanvas = body.querySelector('canvas') !== null;
-                                const hasSubstantialContent = body.children.length > 5 || body.textContent.trim().length > 100;
-                                
-                                // Also check if loading indicators are gone
-                                const loadingIndicators = body.querySelectorAll('[class*="loading"], [class*="spinner"], [class*="Loader"]');
-                                const hasVisibleLoading = Array.from(loadingIndicators).some(el => {
-                                    const style = iframeDoc.defaultView?.getComputedStyle(el);
-                                    return style && style.display !== 'none' && style.visibility !== 'hidden' && parseFloat(style.opacity || '1') > 0.1;
-                                });
-                                
-                                // Consider loaded if we have canvas or substantial content, and no visible loading
-                                if ((hasCanvas || hasSubstantialContent) && !hasVisibleLoading) {
-                                    return true;
-                                }
-                            }
-                        } catch (e) {
-                            // Cross-origin iframe, can't check - assume it might be ready
-                            // For cross-origin iframes, we can't check content, so we'll wait a bit and assume it's ready
-                            continue;
-                        }
-                    }
-                    
-                    return false; // Still loading
-                }
-            """, timeout=30000, polling=500)  # Check every 500ms, timeout after 30s
-            print("Figma prototype finished loading")
-            # Give it an extra moment to be fully interactive
-            await asyncio.sleep(1)
+            # Wait for iframe to appear and be loaded
+            # Most Figma prototypes use cross-origin iframes, so we can't check their content
+            # Instead, just wait for the iframe to exist and have a src/be loaded
+            await page.wait_for_selector('iframe', timeout=10000, state='attached')
+            
+            # Give the iframe a moment to start loading
+            await asyncio.sleep(0.5)
+            
+            # Try to wait for iframe load event (works for same-origin iframes)
+            # For cross-origin, we'll just wait a short time
+            try:
+                iframes = await page.query_selector_all('iframe')
+                if iframes:
+                    # Wait for iframe to load (this works for same-origin iframes)
+                    # For cross-origin, the load event still fires when the iframe loads
+                    # Use gather with return_exceptions to handle cross-origin gracefully
+                    load_tasks = [iframe.wait_for_load_state('load', timeout=5000) for iframe in iframes]
+                    await asyncio.wait_for(
+                        asyncio.gather(*load_tasks, return_exceptions=True),
+                        timeout=8
+                    )
+            except Exception:
+                # Cross-origin iframe or timeout - that's okay, continue
+                pass
+            
+            # Give it a brief moment for initial render
+            await asyncio.sleep(0.5)
+            print("Figma prototype iframe loaded")
         except Exception as e:
-            print(f"Warning: Could not confirm Figma loading complete: {e}, continuing anyway")
+            print(f"Warning: Could not wait for Figma iframe: {e}, continuing anyway")
             # Continue anyway - the page might still be usable
-            # Give it a moment to render
-            await asyncio.sleep(2)
+            await asyncio.sleep(1)
     else:
         # For non-Figma pages, just give a brief moment for rendering
         await asyncio.sleep(0.5)
@@ -591,10 +577,10 @@ async def take_screenshot(session_id: str) -> bytes:
         # Use longer timeout for Figma prototypes (20 seconds) vs regular pages (10 seconds)
         timeout = 20.0 if is_figma else 10.0
         
-        # Try to take screenshot with timeout and reduced quality for memory efficiency
+        # Try to take screenshot with timeout and reduced quality for memory efficiency and speed
         try:
             screenshot_bytes = await asyncio.wait_for(
-                page.screenshot(full_page=False, quality=60, type='jpeg'),  # JPEG with 60% quality for smaller size
+                page.screenshot(full_page=False, quality=50, type='jpeg'),  # JPEG with 50% quality for faster processing
                 timeout=timeout
             )
             return screenshot_bytes
@@ -604,7 +590,7 @@ async def take_screenshot(session_id: str) -> bytes:
             # Retry with even lower quality if first attempt times out
             try:
                 screenshot_bytes = await asyncio.wait_for(
-                    page.screenshot(full_page=False, quality=40, type='jpeg'),  # Lower quality for speed and memory
+                    page.screenshot(full_page=False, quality=35, type='jpeg'),  # Lower quality for speed and memory
                     timeout=timeout
                 )
                 print(f"Successfully took screenshot with reduced quality for session {session_id}")
