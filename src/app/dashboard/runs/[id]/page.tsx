@@ -338,15 +338,22 @@ export default function LiveRunPage() {
       }
       const sessionId = startData.sessionId;
 
-      // Wait for server to be ready
+      // Wait for server to be ready (reduced wait time)
       let serverReady = false;
-      for (let i = 0; i < 50; i++) {
-        await new Promise((r) => setTimeout(r, 2000));
+      const maxHealthChecks = 10; // Reduced from 50
+      const healthCheckInterval = 1000; // Reduced from 2000ms
+
+      for (let i = 0; i < maxHealthChecks; i++) {
+        await new Promise((r) => setTimeout(r, healthCheckInterval));
         try {
           const healthCheck = await proxyScreenshot(sessionId);
           if (healthCheck.status === "ok") {
             serverReady = true;
             break;
+          }
+          // If session not found, it might not be ready yet, continue waiting
+          if (healthCheck.code === "SESSION_NOT_FOUND" && i < maxHealthChecks - 1) {
+            continue;
           }
         } catch {
           // Continue waiting
@@ -436,6 +443,14 @@ export default function LiveRunPage() {
         // Get screenshot
         const screenshotData = await proxyScreenshot(sessionId);
         if (screenshotData.status === "error" || !screenshotData.screenshot) {
+          // If session not found, stop the background simulation
+          if (screenshotData.code === "SESSION_NOT_FOUND") {
+            console.error(
+              `[Run ${runIndex + 1}] Session not found - stopping simulation:`,
+              screenshotData.message
+            );
+            break;
+          }
           await new Promise((r) => setTimeout(r, 1000));
           continue;
         }
@@ -936,13 +951,14 @@ export default function LiveRunPage() {
         }));
 
         let serverReady = false;
-        const maxHealthChecks = 50;
+        const maxHealthChecks = 10; // Reduced from 50 - 10 * 1s = 10 seconds max wait
+        const healthCheckInterval = 1000; // Reduced from 2000ms to 1 second
 
         for (let i = 0; i < maxHealthChecks; i++) {
           // FIX: Check execution ID during wait
           if (activeExecutionIdRef.current !== executionId) return;
 
-          await new Promise((r) => setTimeout(r, 2000));
+          await new Promise((r) => setTimeout(r, healthCheckInterval));
 
           try {
             // Use Server Action for screenshot/health check
@@ -951,6 +967,12 @@ export default function LiveRunPage() {
             if (healthCheck.status === "ok") {
               serverReady = true;
               break;
+            }
+
+            // If session not found (410), the session might not be ready yet, continue waiting
+            if (healthCheck.code === "SESSION_NOT_FOUND" && i < maxHealthChecks - 1) {
+              // Session might not be created yet, continue waiting
+              continue;
             }
           } catch {
             // Server not ready yet, continue waiting
@@ -1342,6 +1364,25 @@ export default function LiveRunPage() {
         if (activeExecutionIdRef.current !== executionId) break;
 
         if (screenshotData.status === "error" || !screenshotData.screenshot) {
+          // If session not found, stop the simulation loop
+          if (screenshotData.code === "SESSION_NOT_FOUND") {
+            console.error("Session not found - stopping simulation:", screenshotData.message);
+            setState((prev) => ({
+              ...prev,
+              status: "error",
+              logs: [
+                ...prev.logs,
+                {
+                  t: Date.now(),
+                  text: `❌ Session expired or closed: ${screenshotData.message}`,
+                },
+              ],
+            }));
+            simulationRef.current = false;
+            setIsSimulating(false);
+            break;
+          }
+
           console.error("Failed to get screenshot:", screenshotData.message);
           await new Promise((r) => setTimeout(r, 1000));
           continue;

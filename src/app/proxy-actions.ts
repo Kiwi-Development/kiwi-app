@@ -200,6 +200,16 @@ export async function proxyScreenshot(sessionId: string) {
       clearTimeout(timeoutId);
 
       if (!res.ok) {
+        // Handle 410 Gone (session not found) specially
+        if (res.status === 410) {
+          const errorData = await res.json().catch(() => ({}));
+          return {
+            status: "error",
+            message: errorData.detail?.message || `Session ${sessionId} not found or closed`,
+            code: "SESSION_NOT_FOUND",
+          };
+        }
+
         // If 404 or other error, return error status but don't throw to avoid crashing loop
         return {
           status: "error",

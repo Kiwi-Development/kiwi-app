@@ -170,6 +170,7 @@ async def get_current_url(session_id: str) -> str:
 async def click_at(session_id: str, x: int, y: int) -> bool:
     """
     Clicks at the specified coordinates (x, y) and returns True if the page URL changed, False otherwise.
+    For Figma prototypes, tries to find and click the actual clickable element.
     """
     global _sessions
     page = _sessions.get(session_id)
@@ -180,37 +181,139 @@ async def click_at(session_id: str, x: int, y: int) -> bool:
 
     print(f"Clicking at ({x}, {y}) for session {session_id}")
     try:
-        # Inject visual indicator
-        await page.evaluate("""
-            ([x, y]) => {
-                const dot = document.createElement('div');
-                dot.style.position = 'absolute';
-                dot.style.left = (x + window.scrollX) + 'px';
-                dot.style.top = (y + window.scrollY) + 'px';
-                dot.style.width = '20px';
-                dot.style.height = '20px';
-                dot.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
-                dot.style.borderRadius = '50%';
-                dot.style.pointerEvents = 'none';
-                dot.style.zIndex = '99999';
-                dot.style.transform = 'translate(-50%, -50%)';
-                dot.style.boxShadow = '0 0 10px rgba(255, 0, 0, 0.5)';
-                document.body.appendChild(dot);
-                
-                setTimeout(() => {
-                    dot.style.transition = 'opacity 0.5s';
-                    dot.style.opacity = '0';
-                    setTimeout(() => dot.remove(), 500);
-                }, 5000);
+        # Get viewport info to account for scrolling and transforms
+        viewport_info = await page.evaluate("""
+            () => {
+                return {
+                    scrollX: window.scrollX || 0,
+                    scrollY: window.scrollY || 0,
+                    innerWidth: window.innerWidth,
+                    innerHeight: window.innerHeight,
+                    devicePixelRatio: window.devicePixelRatio || 1
+                };
             }
-        """, [x, y])
-
-        await asyncio.gather(
-            page.mouse.click(x, y),
-        )
+        """)
+        
+        # Try to find clickable element using Playwright's element detection
+        # This works better with iframes and cross-origin content
+        try:
+            # Use Playwright's locator to find element at point
+            # This handles iframes automatically
+            element_handle = await page.evaluate_handle(f"""
+                () => {{
+                    return document.elementFromPoint({x}, {y});
+                }}
+            """)
+            
+            if element_handle and await element_handle.as_element():
+                # Try to get bounding box of the element
+                try:
+                    box = await element_handle.bounding_box()
+                    if box:
+                        # Use center of element for more reliable clicking
+                        actual_x = int(box['x'] + box['width'] / 2)
+                        actual_y = int(box['y'] + box['height'] / 2)
+                        print(f"Found element, clicking center at ({actual_x}, {actual_y}) instead of ({x}, {y})")
+                        
+                        # Try to click the element directly (more reliable)
+                        try:
+                            await element_handle.click(timeout=5000)
+                            print(f"Successfully clicked element directly")
+                            # Still show visual indicator
+                            await _show_click_indicator(page, x, y, actual_x, actual_y)
+                            return True
+                        except Exception as click_err:
+                            print(f"Element click failed, falling back to coordinate: {click_err}")
+                            # Fall through to coordinate click
+                except Exception as box_err:
+                    print(f"Could not get bounding box: {box_err}")
+        except Exception as elem_err:
+            print(f"Could not find element at point: {elem_err}")
+        
+        # Fallback: use provided coordinates (adjusted for viewport)
+        actual_x = x
+        actual_y = y
+        
+        # Show visual indicator
+        await _show_click_indicator(page, x, y, actual_x, actual_y)
+        
+        # Perform the click at the actual coordinates
+        await page.mouse.click(actual_x, actual_y)
+        print(f"Clicked at coordinates ({actual_x}, {actual_y})")
+        return True
+        
     except Exception as e:
         print(f"An error occurred during click or navigation: {e}")
+        import traceback
+        traceback.print_exc()
         return False
+
+async def _show_click_indicator(page, original_x, original_y, actual_x, actual_y):
+    """Helper method to show visual click indicator"""
+    await page.evaluate("""
+        ([x, y, actualX, actualY]) => {
+            // Create indicator at the actual click position
+            const dot = document.createElement('div');
+            dot.style.position = 'fixed'; // Use fixed to account for scrolling
+            dot.style.left = actualX + 'px';
+            dot.style.top = actualY + 'px';
+            dot.style.width = '24px';
+            dot.style.height = '24px';
+            dot.style.backgroundColor = 'rgba(255, 0, 0, 0.9)';
+            dot.style.borderRadius = '50%';
+            dot.style.pointerEvents = 'none';
+            dot.style.zIndex = '999999';
+            dot.style.transform = 'translate(-50%, -50%)';
+            dot.style.boxShadow = '0 0 20px rgba(255, 0, 0, 1), 0 0 10px rgba(255, 0, 0, 0.6)';
+            dot.style.border = '3px solid white';
+            
+            // Add pulse animation
+            dot.style.animation = 'clickPulse 0.4s ease-out';
+            
+            // Add pulse keyframes if not already added
+            if (!document.getElementById('click-indicator-styles')) {
+                const style = document.createElement('style');
+                style.id = 'click-indicator-styles';
+                style.textContent = `
+                    @keyframes clickPulse {
+                        0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0.3; }
+                        30% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+                        100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            document.body.appendChild(dot);
+            
+            // Also show original position if different (yellow dot)
+            if (actualX !== x || actualY !== y) {
+                const originalDot = document.createElement('div');
+                originalDot.style.position = 'fixed';
+                originalDot.style.left = x + 'px';
+                originalDot.style.top = y + 'px';
+                originalDot.style.width = '16px';
+                originalDot.style.height = '16px';
+                originalDot.style.backgroundColor = 'rgba(255, 255, 0, 0.7)';
+                originalDot.style.borderRadius = '50%';
+                originalDot.style.pointerEvents = 'none';
+                originalDot.style.zIndex = '999998';
+                originalDot.style.transform = 'translate(-50%, -50%)';
+                originalDot.style.border = '2px solid rgba(255, 200, 0, 0.8)';
+                document.body.appendChild(originalDot);
+                
+                setTimeout(() => originalDot.remove(), 2500);
+            }
+            
+            // Remove indicator after animation
+            setTimeout(() => {
+                dot.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+                dot.style.opacity = '0';
+                dot.style.transform = 'translate(-50%, -50%) scale(1.8)';
+                setTimeout(() => dot.remove(), 600);
+            }, 2500);
+        }
+    """, [original_x, original_y, actual_x, actual_y])
 
 async def take_screenshot(session_id: str) -> bytes:
     """

@@ -225,6 +225,18 @@ async def click(request: ClickRequest):
     session_id = request.sessionId
     
     try:
+        # Check if session exists before attempting click
+        if session_id not in browser_controller._sessions:
+            logger.warning(f"Session {session_id} not found for click - may have timed out or been closed")
+            raise HTTPException(
+                status_code=410,  # 410 Gone - session no longer exists
+                detail={
+                    "status": "error",
+                    "message": f"Session {session_id} not found or closed. It may have timed out.",
+                    "code": "SESSION_NOT_FOUND"
+                }
+            )
+        
         old_url = run_async(browser_controller.get_current_url(session_id))
         run_async(browser_controller.click_at(session_id, x, y))
         new_url = run_async(browser_controller.get_current_url(session_id))
@@ -233,6 +245,8 @@ async def click(request: ClickRequest):
             return {"status": "click_failed", "message": "Click failed to hit button. Try again."}
         
         return {"status": "ok"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error clicking: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail={"status": "error", "message": str(e)})
@@ -243,6 +257,19 @@ async def screenshot(request: ScreenshotRequest):
     session_id = request.sessionId
 
     try:
+        # Check if session exists before attempting screenshot
+        import browser_controller
+        if session_id not in browser_controller._sessions:
+            logger.warning(f"Session {session_id} not found - may have timed out or been closed")
+            raise HTTPException(
+                status_code=410,  # 410 Gone - session no longer exists
+                detail={
+                    "status": "error",
+                    "message": f"Session {session_id} not found or closed. It may have timed out.",
+                    "code": "SESSION_NOT_FOUND"
+                }
+            )
+        
         img_bytes = run_async(browser_controller.take_screenshot(session_id))
         
         if not img_bytes:
