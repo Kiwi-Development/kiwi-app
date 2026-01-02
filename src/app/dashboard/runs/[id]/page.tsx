@@ -466,8 +466,38 @@ export default function LiveRunPage() {
             );
             break;
           }
-          await new Promise((r) => setTimeout(r, 1000));
-          continue;
+
+          // If screenshot timeout, retry a few times before continuing
+          if (screenshotData.code === "SCREENSHOT_TIMEOUT") {
+            console.warn(`[Run ${runIndex + 1}] Screenshot timeout, retrying...`);
+            let retryCount = 0;
+            let retrySuccess = false;
+            while (retryCount < 2 && !retrySuccess) {
+              await new Promise((r) => setTimeout(r, 2000 * (retryCount + 1)));
+              const retryResult: any = await proxyScreenshot(sessionId);
+              if (retryResult.status === "ok" && retryResult.screenshot) {
+                // Success - continue with this screenshot
+                const b64 = retryResult.screenshot;
+                runScreenshotIndex++;
+                retrySuccess = true;
+                // Break out of the error handling and continue with normal flow
+                break;
+              }
+              retryCount++;
+            }
+
+            if (!retrySuccess) {
+              console.warn(
+                `[Run ${runIndex + 1}] Screenshot timeout after retries, skipping this frame`
+              );
+              await new Promise((r) => setTimeout(r, 2000));
+              continue;
+            }
+            // If retry succeeded, continue with normal flow (will process screenshot below)
+          } else {
+            await new Promise((r) => setTimeout(r, 1000));
+            continue;
+          }
         }
 
         const b64 = screenshotData.screenshot;
@@ -665,7 +695,9 @@ export default function LiveRunPage() {
                           bounding_box: finding.elementPosition,
                           element_selector: finding.elementSelector,
                         }
-                      : undefined
+                      : undefined,
+                    runClickHistory, // Pass click history for detailed action sequences
+                    runAgentHistory // Pass agent history for rationale/quotes
                   );
                   return {
                     ...finding,
@@ -729,6 +761,79 @@ export default function LiveRunPage() {
 
               // Save feedback entries
               if (enhancedFindings && enhancedFindings.length > 0) {
+                // Helper function to normalize category to valid enum value
+                const normalizeCategory = (
+                  category: string | undefined
+                ):
+                  | "navigation"
+                  | "copy"
+                  | "affordance_feedback"
+                  | "forms"
+                  | "hierarchy"
+                  | "accessibility"
+                  | "conversion"
+                  | "other" => {
+                  if (!category) return "other";
+
+                  const normalized = category.toLowerCase().trim();
+
+                  // Map valid categories
+                  if (
+                    [
+                      "navigation",
+                      "copy",
+                      "affordance_feedback",
+                      "forms",
+                      "hierarchy",
+                      "accessibility",
+                      "conversion",
+                      "other",
+                    ].includes(normalized)
+                  ) {
+                    return normalized as any;
+                  }
+
+                  // Map heuristic-based categories to valid values
+                  const heuristicMap: Record<
+                    string,
+                    | "navigation"
+                    | "copy"
+                    | "affordance_feedback"
+                    | "forms"
+                    | "hierarchy"
+                    | "accessibility"
+                    | "conversion"
+                    | "other"
+                  > = {
+                    user_control_and_freedom: "affordance_feedback",
+                    visibility_of_system_status: "affordance_feedback",
+                    match_between_system_and_real_world: "copy",
+                    consistency_and_standards: "navigation",
+                    error_prevention: "forms",
+                    recognition_rather_than_recall: "navigation",
+                    flexibility_and_efficiency_of_use: "navigation",
+                    aesthetic_and_minimalist_design: "hierarchy",
+                    help_users_recognize_diagnose_and_recover_from_errors: "affordance_feedback",
+                    help_and_documentation: "other",
+                  };
+
+                  // Check if it matches any heuristic name (with underscores, hyphens, or spaces)
+                  const heuristicKey = normalized.replace(/[-\s]/g, "_");
+                  if (heuristicMap[heuristicKey]) {
+                    return heuristicMap[heuristicKey];
+                  }
+
+                  // Check if category contains heuristic keywords
+                  for (const [heuristic, mappedCategory] of Object.entries(heuristicMap)) {
+                    if (normalized.includes(heuristic) || heuristic.includes(normalized)) {
+                      return mappedCategory;
+                    }
+                  }
+
+                  // Default to "other" for unknown categories
+                  return "other";
+                };
+
                 const feedbackEntries = enhancedFindings.map((finding: EnhancedFinding) => {
                   let severity = "Low";
                   const severityLower = finding.severity?.toLowerCase() || "low";
@@ -748,7 +853,7 @@ export default function LiveRunPage() {
                     confidence: finding.confidence ?? 0,
                     confidence_level:
                       finding.confidence >= 70 ? "High" : finding.confidence >= 40 ? "Med" : "Low",
-                    category: finding.category || "other",
+                    category: normalizeCategory(finding.category),
                     description: finding.description || "",
                     suggested_fix: finding.suggestedFix || null,
                     affecting_tasks: finding.affectingTasks || [],
@@ -1299,6 +1404,79 @@ export default function LiveRunPage() {
                   evidenceSnippets
                 );
 
+                // Normalize category to valid enum value
+                const normalizeCategory = (
+                  category: string | undefined
+                ):
+                  | "navigation"
+                  | "copy"
+                  | "affordance_feedback"
+                  | "forms"
+                  | "hierarchy"
+                  | "accessibility"
+                  | "conversion"
+                  | "other" => {
+                  if (!category) return "other";
+
+                  const normalized = category.toLowerCase().trim();
+
+                  // Map valid categories
+                  if (
+                    [
+                      "navigation",
+                      "copy",
+                      "affordance_feedback",
+                      "forms",
+                      "hierarchy",
+                      "accessibility",
+                      "conversion",
+                      "other",
+                    ].includes(normalized)
+                  ) {
+                    return normalized as any;
+                  }
+
+                  // Map heuristic-based categories to valid values
+                  const heuristicMap: Record<
+                    string,
+                    | "navigation"
+                    | "copy"
+                    | "affordance_feedback"
+                    | "forms"
+                    | "hierarchy"
+                    | "accessibility"
+                    | "conversion"
+                    | "other"
+                  > = {
+                    user_control_and_freedom: "affordance_feedback",
+                    visibility_of_system_status: "affordance_feedback",
+                    match_between_system_and_real_world: "copy",
+                    consistency_and_standards: "navigation",
+                    error_prevention: "forms",
+                    recognition_rather_than_recall: "navigation",
+                    flexibility_and_efficiency_of_use: "navigation",
+                    aesthetic_and_minimalist_design: "hierarchy",
+                    help_users_recognize_diagnose_and_recover_from_errors: "affordance_feedback",
+                    help_and_documentation: "other",
+                  };
+
+                  // Check if it matches any heuristic name (with underscores, hyphens, or spaces)
+                  const heuristicKey = normalized.replace(/[-\s]/g, "_");
+                  if (heuristicMap[heuristicKey]) {
+                    return heuristicMap[heuristicKey];
+                  }
+
+                  // Check if category contains heuristic keywords
+                  for (const [heuristic, mappedCategory] of Object.entries(heuristicMap)) {
+                    if (normalized.includes(heuristic) || heuristic.includes(normalized)) {
+                      return mappedCategory;
+                    }
+                  }
+
+                  // Default to "other" for unknown categories
+                  return "other";
+                };
+
                 return {
                   test_run_id: testRunId,
                   persona_version_id: personaVersionId,
@@ -1308,7 +1486,7 @@ export default function LiveRunPage() {
                   confidence_level:
                     finding.confidence_level ||
                     (finding.confidence >= 70 ? "High" : finding.confidence >= 40 ? "Med" : "Low"),
-                  category: finding.category || "other",
+                  category: normalizeCategory(finding.category),
                   description: finding.description || "",
                   suggested_fix: finding.suggestedFix || null,
                   affecting_tasks: finding.affectingTasks || [],
@@ -1423,9 +1601,39 @@ export default function LiveRunPage() {
             break;
           }
 
-          console.error("Failed to get screenshot:", screenshotData.message);
-          await new Promise((r) => setTimeout(r, 1000));
-          continue;
+          // If screenshot timeout, retry a few times before giving up
+          if (screenshotData.code === "SCREENSHOT_TIMEOUT") {
+            console.warn("Screenshot timeout, retrying...", screenshotData.message);
+            // Retry up to 3 times with increasing delays
+            let retryCount = 0;
+            let retrySuccess = false;
+            while (retryCount < 3 && !retrySuccess) {
+              await new Promise((r) => setTimeout(r, 2000 * (retryCount + 1))); // 2s, 4s, 6s delays
+              const retryResult = await proxyScreenshot(sessionId);
+              if (retryResult.status === "ok" && retryResult.screenshot) {
+                // Success - use this screenshot
+                const b64 = retryResult.screenshot;
+                setCurrentScreenshot(b64);
+                screenshotIndex++;
+                retrySuccess = true;
+                // Continue with normal flow - break out of error handling
+                break;
+              }
+              retryCount++;
+            }
+
+            if (!retrySuccess) {
+              console.error("Screenshot timeout after retries, continuing with last known state");
+              // Continue with simulation - don't break, just skip this screenshot
+              await new Promise((r) => setTimeout(r, 2000));
+              continue;
+            }
+            // If we got here, we have a valid screenshot from retry, continue normally
+          } else {
+            console.error("Failed to get screenshot:", screenshotData.message);
+            await new Promise((r) => setTimeout(r, 1000));
+            continue;
+          }
         }
 
         const b64 = screenshotData.screenshot;
@@ -1676,6 +1884,9 @@ export default function LiveRunPage() {
                   state.personas[0]?.variant ||
                   "User";
 
+                // Fix TypeScript error - Persona type doesn't have description
+                const personaDescription = personaData?.attributes?.description || null;
+
                 // Only enhance if we have semantic context
                 if (
                   semanticContextRef.current?.dom_tree ||
@@ -1782,7 +1993,9 @@ export default function LiveRunPage() {
                           bounding_box: finding.elementPosition,
                           element_selector: finding.elementSelector,
                         }
-                      : undefined
+                      : undefined,
+                    clickHistory, // Pass click history for detailed action sequences
+                    agentHistoryRef.current // Pass agent history for rationale/quotes
                   );
 
                   evidenceMap.set(idx.toString(), [evidence]);

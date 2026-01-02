@@ -177,7 +177,7 @@ async def get_current_url(session_id: str) -> str:
 async def click_at(session_id: str, x: int, y: int) -> bool:
     """
     Clicks at the specified coordinates (x, y) and returns True if the page URL changed, False otherwise.
-    For Figma prototypes, tries to find and click the actual clickable element.
+    For Figma prototypes, detects blue highlighted clickable elements and clicks them accurately.
     """
     global _sessions
     page = _sessions.get(session_id)
@@ -188,62 +188,160 @@ async def click_at(session_id: str, x: int, y: int) -> bool:
 
     print(f"Clicking at ({x}, {y}) for session {session_id}")
     try:
-        # Get viewport info to account for scrolling and transforms
-        viewport_info = await page.evaluate("""
-            () => {
-                return {
-                    scrollX: window.scrollX || 0,
-                    scrollY: window.scrollY || 0,
-                    innerWidth: window.innerWidth,
-                    innerHeight: window.innerHeight,
-                    devicePixelRatio: window.devicePixelRatio || 1
-                };
+        # First, try to detect Figma's blue highlighted clickable elements
+        # Figma shows clickable elements with a blue outline when you hover/click
+        clickable_element_info = await page.evaluate("""
+            ([x, y]) => {
+                // Look for Figma's highlighted clickable elements (blue outline)
+                // These are typically elements with specific Figma classes or data attributes
+                const allElements = document.elementsFromPoint(x, y);
+                
+                // Check for Figma-specific clickable indicators
+                for (const elem of allElements) {
+                    const style = window.getComputedStyle(elem);
+                    const rect = elem.getBoundingClientRect();
+                    
+                    // Check for blue outline (Figma's clickable indicator)
+                    // Figma uses rgba(18, 96, 255, ...) or similar blue colors for highlights
+                    const outlineColor = style.outlineColor || '';
+                    const borderColor = style.borderColor || '';
+                    const boxShadow = style.boxShadow || '';
+                    
+                    // Check if element has Figma's clickable indicator (blue highlight)
+                    const hasBlueHighlight = 
+                        outlineColor.includes('rgb(18, 96, 255)') ||
+                        outlineColor.includes('rgb(18, 96, 255)') ||
+                        borderColor.includes('rgb(18, 96, 255)') ||
+                        boxShadow.includes('rgb(18, 96, 255)') ||
+                        boxShadow.includes('rgba(18, 96, 255') ||
+                        // Also check for cursor pointer (clickable indicator)
+                        style.cursor === 'pointer' ||
+                        elem.onclick !== null ||
+                        elem.getAttribute('role') === 'button' ||
+                        elem.tagName === 'BUTTON' ||
+                        elem.tagName === 'A';
+                    
+                    if (hasBlueHighlight && rect.width > 0 && rect.height > 0) {
+                        // Found a clickable element - return its center coordinates
+                        return {
+                            found: true,
+                            centerX: rect.left + rect.width / 2,
+                            centerY: rect.top + rect.height / 2,
+                            boundingRect: {
+                                x: rect.left,
+                                y: rect.top,
+                                width: rect.width,
+                                height: rect.height
+                            },
+                            isClickable: true
+                        };
+                    }
+                }
+                
+                // If no highlighted element, check iframe content (Figma prototypes are in iframes)
+                const iframes = document.querySelectorAll('iframe');
+                for (const iframe of iframes) {
+                    try {
+                        const iframeRect = iframe.getBoundingClientRect();
+                        if (x >= iframeRect.left && x <= iframeRect.right && 
+                            y >= iframeRect.top && y <= iframeRect.bottom) {
+                            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                            if (iframeDoc) {
+                                const iframeX = x - iframeRect.left;
+                                const iframeY = y - iframeRect.top;
+                                const iframeElement = iframeDoc.elementFromPoint(iframeX, iframeY);
+                                
+                                if (iframeElement) {
+                                    const iframeStyle = iframeDoc.defaultView?.getComputedStyle(iframeElement);
+                                    const iframeRect2 = iframeElement.getBoundingClientRect();
+                                    
+                                    if (iframeStyle && (
+                                        iframeStyle.cursor === 'pointer' ||
+                                        iframeElement.onclick !== null ||
+                                        iframeElement.getAttribute('role') === 'button'
+                                    )) {
+                                        // Calculate center relative to main page
+                                        const centerX = iframeRect.left + iframeRect2.left + iframeRect2.width / 2;
+                                        const centerY = iframeRect.top + iframeRect2.top + iframeRect2.height / 2;
+                                        
+                                        return {
+                                            found: true,
+                                            centerX: centerX,
+                                            centerY: centerY,
+                                            boundingRect: {
+                                                x: iframeRect.left + iframeRect2.left,
+                                                y: iframeRect.top + iframeRect2.top,
+                                                width: iframeRect2.width,
+                                                height: iframeRect2.height
+                                            },
+                                            isClickable: true,
+                                            isIframe: true
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // Cross-origin iframe, can't access
+                        continue;
+                    }
+                }
+                
+                // Fallback: find any element at point
+                const element = document.elementFromPoint(x, y);
+                if (element) {
+                    const rect = element.getBoundingClientRect();
+                    return {
+                        found: true,
+                        centerX: rect.left + rect.width / 2,
+                        centerY: rect.top + rect.height / 2,
+                        boundingRect: {
+                            x: rect.left,
+                            y: rect.top,
+                            width: rect.width,
+                            height: rect.height
+                        },
+                        isClickable: false
+                    };
+                }
+                
+                return { found: false };
             }
-        """)
+        """, [x, y])
         
-        # Try to find clickable element using Playwright's element detection
-        # This works better with iframes and cross-origin content
-        try:
-            # Use evaluate_handle to get element at point
-            element_handle = await page.evaluate_handle(f"""
-                () => {{
-                    return document.elementFromPoint({x}, {y});
-                }}
-            """)
-            
-            # Check if we got a valid handle and convert to ElementHandle
-            if element_handle:
-                element = element_handle.as_element()
-                if element:
-                    # Try to get bounding box of the element
-                    try:
-                        box = await element.bounding_box()
-                        if box:
-                            # Use center of element for more reliable clicking
-                            actual_x = int(box['x'] + box['width'] / 2)
-                            actual_y = int(box['y'] + box['height'] / 2)
-                            print(f"Found element, clicking center at ({actual_x}, {actual_y}) instead of ({x}, {y})")
-                            
-                            # Try to click the element directly (more reliable)
-                            try:
-                                await element.click(timeout=5000)
-                                print(f"Successfully clicked element directly")
-                                # Still show visual indicator
-                                await _show_click_indicator(page, x, y, actual_x, actual_y)
-                                return True
-                            except Exception as click_err:
-                                print(f"Element click failed, falling back to coordinate: {click_err}")
-                                # Fall through to coordinate click
-                    except Exception as box_err:
-                        print(f"Could not get bounding box: {box_err}")
-        except Exception as elem_err:
-            print(f"Could not find element at point: {elem_err}")
-        
-        # Fallback: use provided coordinates (adjusted for viewport)
         actual_x = x
         actual_y = y
         
-        # Show visual indicator
+        # If we found a clickable element, use its center
+        if clickable_element_info.get('found'):
+            actual_x = int(clickable_element_info['centerX'])
+            actual_y = int(clickable_element_info['centerY'])
+            print(f"Found clickable element, clicking center at ({actual_x}, {actual_y}) instead of ({x}, {y})")
+            
+            # If it's in an iframe, we need to click within the iframe context
+            if clickable_element_info.get('isIframe'):
+                # Try to find and click within the iframe
+                try:
+                    iframe_handles = await page.query_selector_all('iframe')
+                    for iframe_handle in iframe_handles:
+                        try:
+                            frame = await iframe_handle.content_frame()
+                            if frame:
+                                # Click at the relative coordinates within the iframe
+                                iframe_rect = await iframe_handle.bounding_box()
+                                if iframe_rect:
+                                    iframe_x = actual_x - int(iframe_rect['x'])
+                                    iframe_y = actual_y - int(iframe_rect['y'])
+                                    await frame.mouse.click(iframe_x, iframe_y)
+                                    print(f"Successfully clicked within iframe at ({iframe_x}, {iframe_y})")
+                                    await _show_click_indicator(page, x, y, actual_x, actual_y)
+                                    return True
+                        except:
+                            continue
+                except Exception as iframe_err:
+                    print(f"Could not click in iframe, falling back to coordinate: {iframe_err}")
+        
+        # Show visual indicator with smooth animation
         await _show_click_indicator(page, x, y, actual_x, actual_y)
         
         # Perform the click at the actual coordinates
@@ -258,36 +356,96 @@ async def click_at(session_id: str, x: int, y: int) -> bool:
         return False
 
 async def _show_click_indicator(page, original_x, original_y, actual_x, actual_y):
-    """Helper method to show visual click indicator"""
+    """Helper method to show visual click indicator with smooth animation and cursor trail"""
     await page.evaluate("""
         ([x, y, actualX, actualY]) => {
-            // Create indicator at the actual click position
+            // Remove any existing indicators first
+            const existing = document.querySelectorAll('.kiwi-click-indicator');
+            existing.forEach(el => el.remove());
+            
+            // Create smooth cursor trail animation showing movement
+            const createCursorTrail = (startX, startY, endX, endY, color, size) => {
+                const steps = 8;
+                const distance = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                
+                // Only show trail if movement is significant
+                if (distance < 10) return;
+                
+                for (let i = 0; i <= steps; i++) {
+                    const progress = i / steps;
+                    // Use easing for smoother trail
+                    const easedProgress = 1 - Math.pow(1 - progress, 3);
+                    const trailX = startX + (endX - startX) * easedProgress;
+                    const trailY = startY + (endY - startY) * easedProgress;
+                    const opacity = 0.15 + (0.65 * (1 - progress));
+                    const scale = 0.3 + (0.7 * progress);
+                    
+                    const dot = document.createElement('div');
+                    dot.className = 'kiwi-click-indicator kiwi-cursor-trail';
+                    dot.style.position = 'fixed';
+                    dot.style.left = trailX + 'px';
+                    dot.style.top = trailY + 'px';
+                    dot.style.width = (size * scale) + 'px';
+                    dot.style.height = (size * scale) + 'px';
+                    dot.style.backgroundColor = color;
+                    dot.style.borderRadius = '50%';
+                    dot.style.pointerEvents = 'none';
+                    dot.style.zIndex = (999999 - i).toString();
+                    dot.style.transform = 'translate(-50%, -50%)';
+                    dot.style.opacity = opacity.toString();
+                    
+                    document.body.appendChild(dot);
+                    
+                    // Fade out trail dots smoothly
+                    setTimeout(() => {
+                        dot.style.transition = 'opacity 0.25s ease-out';
+                        dot.style.opacity = '0';
+                        setTimeout(() => dot.remove(), 250);
+                    }, i * 30);
+                }
+            };
+            
+            // Create main click indicator at actual position (red, larger, more visible)
             const dot = document.createElement('div');
-            dot.style.position = 'fixed'; // Use fixed to account for scrolling
+            dot.className = 'kiwi-click-indicator';
+            dot.style.position = 'fixed';
             dot.style.left = actualX + 'px';
             dot.style.top = actualY + 'px';
-            dot.style.width = '24px';
-            dot.style.height = '24px';
-            dot.style.backgroundColor = 'rgba(255, 0, 0, 0.9)';
+            dot.style.width = '32px';
+            dot.style.height = '32px';
+            dot.style.backgroundColor = 'rgba(255, 0, 0, 0.96)';
             dot.style.borderRadius = '50%';
             dot.style.pointerEvents = 'none';
             dot.style.zIndex = '999999';
             dot.style.transform = 'translate(-50%, -50%)';
-            dot.style.boxShadow = '0 0 20px rgba(255, 0, 0, 1), 0 0 10px rgba(255, 0, 0, 0.6)';
-            dot.style.border = '3px solid white';
+            dot.style.boxShadow = '0 0 35px rgba(255, 0, 0, 1), 0 0 25px rgba(255, 0, 0, 0.9), 0 0 15px rgba(255, 0, 0, 0.7)';
+            dot.style.border = '4px solid white';
             
-            // Add pulse animation
-            dot.style.animation = 'clickPulse 0.4s ease-out';
-            
-            // Add pulse keyframes if not already added
-            if (!document.getElementById('click-indicator-styles')) {
+            // Add smooth pulse animation styles
+            if (!document.getElementById('kiwi-click-indicator-styles')) {
                 const style = document.createElement('style');
-                style.id = 'click-indicator-styles';
+                style.id = 'kiwi-click-indicator-styles';
                 style.textContent = `
-                    @keyframes clickPulse {
-                        0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0.3; }
-                        30% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
-                        100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+                    @keyframes kiwiClickPulse {
+                        0% { 
+                            transform: translate(-50%, -50%) scale(0.15); 
+                            opacity: 0.2; 
+                        }
+                        12% { 
+                            transform: translate(-50%, -50%) scale(1.6); 
+                            opacity: 1; 
+                        }
+                        25% { 
+                            transform: translate(-50%, -50%) scale(1.15); 
+                            opacity: 0.98; 
+                        }
+                        100% { 
+                            transform: translate(-50%, -50%) scale(1); 
+                            opacity: 0.96; 
+                        }
+                    }
+                    .kiwi-click-indicator {
+                        animation: kiwiClickPulse 0.65s cubic-bezier(0.34, 1.56, 0.64, 1);
                     }
                 `;
                 document.head.appendChild(style);
@@ -295,38 +453,48 @@ async def _show_click_indicator(page, original_x, original_y, actual_x, actual_y
             
             document.body.appendChild(dot);
             
-            // Also show original position if different (yellow dot)
-            if (actualX !== x || actualY !== y) {
+            // Create smooth cursor trail if position changed (shows movement path)
+            if (Math.abs(actualX - x) > 5 || Math.abs(actualY - y) > 5) {
+                createCursorTrail(x, y, actualX, actualY, 'rgba(255, 255, 0, 0.75)', 16);
+                
+                // Show original target position (yellow, smaller)
                 const originalDot = document.createElement('div');
+                originalDot.className = 'kiwi-click-indicator kiwi-original-target';
                 originalDot.style.position = 'fixed';
                 originalDot.style.left = x + 'px';
                 originalDot.style.top = y + 'px';
-                originalDot.style.width = '16px';
-                originalDot.style.height = '16px';
-                originalDot.style.backgroundColor = 'rgba(255, 255, 0, 0.7)';
+                originalDot.style.width = '22px';
+                originalDot.style.height = '22px';
+                originalDot.style.backgroundColor = 'rgba(255, 255, 0, 0.92)';
                 originalDot.style.borderRadius = '50%';
                 originalDot.style.pointerEvents = 'none';
                 originalDot.style.zIndex = '999998';
                 originalDot.style.transform = 'translate(-50%, -50%)';
-                originalDot.style.border = '2px solid rgba(255, 200, 0, 0.8)';
+                originalDot.style.boxShadow = '0 0 30px rgba(255, 255, 0, 0.95)';
+                originalDot.style.border = '3px solid white';
+                originalDot.style.transition = 'opacity 0.5s ease-out';
                 document.body.appendChild(originalDot);
-                
-                setTimeout(() => originalDot.remove(), 2500);
+
+                setTimeout(() => {
+                    originalDot.style.opacity = '0';
+                    setTimeout(() => originalDot.remove(), 500);
+                }, 3200);
             }
             
-            // Remove indicator after animation
+            // Fade out main indicator after showing
             setTimeout(() => {
-                dot.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+                dot.style.transition = 'opacity 0.8s ease-out, transform 0.8s ease-out';
                 dot.style.opacity = '0';
-                dot.style.transform = 'translate(-50%, -50%) scale(1.8)';
-                setTimeout(() => dot.remove(), 600);
-            }, 2500);
+                dot.style.transform = 'translate(-50%, -50%) scale(1.7)';
+                setTimeout(() => dot.remove(), 800);
+            }, 4200);
         }
     """, [original_x, original_y, actual_x, actual_y])
 
 async def take_screenshot(session_id: str) -> bytes:
     """
     Takes a screenshot of the current page and returns the bytes.
+    For Figma prototypes, uses a longer timeout as they can be slow to render.
     """
     global _sessions
     page = _sessions.get(session_id)
@@ -337,15 +505,46 @@ async def take_screenshot(session_id: str) -> bytes:
     
     try:
         print(f"Taking screenshot for session {session_id}...")
-        # Add timeout to screenshot to prevent hanging
-        screenshot_bytes = await asyncio.wait_for(
-            page.screenshot(),
-            timeout=10.0  # 10 second timeout
-        )
-        return screenshot_bytes
-    except asyncio.TimeoutError:
-        print(f"Error: Screenshot timeout for session {session_id}")
-        raise ValueError(f"Screenshot timeout for session {session_id}")
+        
+        # Check if page is a Figma prototype (longer timeout needed)
+        is_figma = 'figma.com' in page.url
+        
+        # Use longer timeout for Figma prototypes (30 seconds) vs regular pages (15 seconds)
+        timeout = 30.0 if is_figma else 15.0
+        
+        # Try to take screenshot with timeout
+        try:
+            screenshot_bytes = await asyncio.wait_for(
+                page.screenshot(full_page=False),  # full_page=False is faster
+                timeout=timeout
+            )
+            return screenshot_bytes
+        except asyncio.TimeoutError:
+            print(f"Warning: Screenshot timeout ({timeout}s) for session {session_id}, trying with reduced quality...")
+            
+            # Retry with reduced quality/full_page=False if first attempt times out
+            try:
+                screenshot_bytes = await asyncio.wait_for(
+                    page.screenshot(full_page=False, quality=75),  # Reduced quality for speed
+                    timeout=timeout
+                )
+                print(f"Successfully took screenshot with reduced quality for session {session_id}")
+                return screenshot_bytes
+            except asyncio.TimeoutError:
+                print(f"Error: Screenshot timeout even with reduced quality for session {session_id}")
+                # Check if page is still responsive
+                try:
+                    await asyncio.wait_for(page.evaluate("() => document.readyState"), timeout=2.0)
+                    print(f"Page is still responsive, but screenshot is timing out")
+                except:
+                    print(f"Page appears unresponsive")
+                
+                # Return a minimal error screenshot or raise
+                raise ValueError(f"Screenshot timeout for session {session_id} after {timeout}s")
+                
+    except ValueError:
+        # Re-raise ValueError (our custom errors)
+        raise
     except Exception as e:
         print(f"Error taking screenshot for session {session_id}: {e}")
         import traceback

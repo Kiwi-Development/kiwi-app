@@ -270,7 +270,32 @@ async def screenshot(request: ScreenshotRequest):
                 }
             )
         
-        img_bytes = run_async(browser_controller.take_screenshot(session_id))
+        try:
+            img_bytes = run_async(browser_controller.take_screenshot(session_id))
+        except ValueError as ve:
+            # Handle screenshot timeout or session not found
+            error_msg = str(ve)
+            logger.warning(f"Screenshot failed for session {session_id}: {error_msg}")
+            
+            if "timeout" in error_msg.lower():
+                raise HTTPException(
+                    status_code=504,  # 504 Gateway Timeout
+                    detail={
+                        "status": "error",
+                        "message": f"Screenshot timeout for session {session_id}. The page may be taking too long to render.",
+                        "code": "SCREENSHOT_TIMEOUT"
+                    }
+                )
+            else:
+                # Session not found or closed
+                raise HTTPException(
+                    status_code=410,  # 410 Gone
+                    detail={
+                        "status": "error",
+                        "message": error_msg,
+                        "code": "SESSION_NOT_FOUND"
+                    }
+                )
         
         if not img_bytes:
             raise HTTPException(

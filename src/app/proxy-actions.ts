@@ -200,13 +200,24 @@ export async function proxyScreenshot(sessionId: string) {
       clearTimeout(timeoutId);
 
       if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+
         // Handle 410 Gone (session not found) specially
         if (res.status === 410) {
-          const errorData = await res.json().catch(() => ({}));
           return {
             status: "error",
             message: errorData.detail?.message || `Session ${sessionId} not found or closed`,
             code: "SESSION_NOT_FOUND",
+          };
+        }
+
+        // Handle 504 Gateway Timeout (screenshot timeout)
+        if (res.status === 504) {
+          return {
+            status: "error",
+            message:
+              errorData.detail?.message || "Screenshot timeout - page is taking too long to render",
+            code: "SCREENSHOT_TIMEOUT",
           };
         }
 
