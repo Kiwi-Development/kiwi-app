@@ -139,8 +139,6 @@ async def start_session(url: str) -> str:
     try:
         # Start with 'domcontentloaded' - fastest, good enough for Figma
         await page.goto(url, wait_until="domcontentloaded", timeout=45000)
-        # Give a brief moment for initial rendering (Figma needs this)
-        await asyncio.sleep(0.5)  # Reduced to 0.5 seconds
     except Exception as e:
         print(f"Navigation with domcontentloaded failed, trying 'load' instead: {e}")
         try:
@@ -155,6 +153,65 @@ async def start_session(url: str) -> str:
                 print(f"All navigation strategies failed: {e3}")
                 # If all fail, at least we tried - the page might still be usable
                 raise
+    
+    # For Figma prototypes, wait for the loading screen to disappear
+    is_figma = 'figma.com' in url
+    if is_figma:
+        print(f"Waiting for Figma prototype to finish loading...")
+        try:
+            # Wait for Figma prototype iframe to load and be interactive
+            # Use wait_for_function to check if loading is complete
+            await page.wait_for_function("""
+                () => {
+                    // Check for iframes (Figma prototypes load in iframes)
+                    const iframes = document.querySelectorAll('iframe');
+                    if (iframes.length === 0) {
+                        return false; // No iframe yet
+                    }
+                    
+                    // Check if any iframe has loaded content
+                    for (const iframe of iframes) {
+                        try {
+                            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                            if (iframeDoc && iframeDoc.body) {
+                                // Check if iframe has substantial content (not just loading screen)
+                                const body = iframeDoc.body;
+                                const hasCanvas = body.querySelector('canvas') !== null;
+                                const hasSubstantialContent = body.children.length > 5 || body.textContent.trim().length > 100;
+                                
+                                // Also check if loading indicators are gone
+                                const loadingIndicators = body.querySelectorAll('[class*="loading"], [class*="spinner"], [class*="Loader"]');
+                                const hasVisibleLoading = Array.from(loadingIndicators).some(el => {
+                                    const style = iframeDoc.defaultView?.getComputedStyle(el);
+                                    return style && style.display !== 'none' && style.visibility !== 'hidden' && parseFloat(style.opacity || '1') > 0.1;
+                                });
+                                
+                                // Consider loaded if we have canvas or substantial content, and no visible loading
+                                if ((hasCanvas || hasSubstantialContent) && !hasVisibleLoading) {
+                                    return true;
+                                }
+                            }
+                        } catch (e) {
+                            // Cross-origin iframe, can't check - assume it might be ready
+                            // For cross-origin iframes, we can't check content, so we'll wait a bit and assume it's ready
+                            continue;
+                        }
+                    }
+                    
+                    return false; // Still loading
+                }
+            """, timeout=30000, polling=500)  # Check every 500ms, timeout after 30s
+            print("Figma prototype finished loading")
+            # Give it an extra moment to be fully interactive
+            await asyncio.sleep(1)
+        except Exception as e:
+            print(f"Warning: Could not confirm Figma loading complete: {e}, continuing anyway")
+            # Continue anyway - the page might still be usable
+            # Give it a moment to render
+            await asyncio.sleep(2)
+    else:
+        # For non-Figma pages, just give a brief moment for rendering
+        await asyncio.sleep(0.5)
     
     _sessions[session_id] = page
     print(f"Session {session_id} started successfully.")
@@ -355,15 +412,16 @@ async def click_at(session_id: str, x: int, y: int) -> bool:
                                     iframe_y = actual_y - int(iframe_rect['y'])
                                     await frame.mouse.click(iframe_x, iframe_y)
                                     print(f"Successfully clicked within iframe at ({iframe_x}, {iframe_y})")
-                                    await _show_click_indicator(page, x, y, actual_x, actual_y)
+                                    # Click indicator disabled - doesn't align with activity logs
+                                    # await _show_click_indicator(page, x, y, actual_x, actual_y)
                                     return True
                         except:
                             continue
                 except Exception as iframe_err:
                     print(f"Could not click in iframe, falling back to coordinate: {iframe_err}")
         
-        # Show visual indicator with smooth animation
-        await _show_click_indicator(page, x, y, actual_x, actual_y)
+        # Click indicator disabled - doesn't align with activity logs
+        # await _show_click_indicator(page, x, y, actual_x, actual_y)
         
         # Perform the click at the actual coordinates
         await page.mouse.click(actual_x, actual_y)
