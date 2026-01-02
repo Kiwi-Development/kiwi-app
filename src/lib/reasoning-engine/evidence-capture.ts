@@ -53,7 +53,7 @@ export function extractEvidenceFromRun(
     if (event.type === 'click') {
       // Try to get click coordinates from click history
       const clickInfo = clickHistory?.find(c => 
-        Math.abs(c.timestamp - (event.timestamp || 0)) < 2000 // Within 2 seconds
+        Math.abs(c.timestamp - (event.t * 1000 || 0)) < 2000 // Within 2 seconds
       );
       
       if (clickInfo) {
