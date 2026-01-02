@@ -64,8 +64,8 @@ def run_async(coro):
 session_timers = {}
 
 # Maximum number of concurrent sessions to prevent memory issues
-# Reduced to 2 for 512MB memory limit on Render free tier
-MAX_CONCURRENT_SESSIONS = 2
+# Set to 4 for Standard tier (1GB+ RAM) - can handle more concurrent users
+MAX_CONCURRENT_SESSIONS = 4
 
 def cleanup_old_sessions():
     """Closes the oldest sessions if we exceed MAX_CONCURRENT_SESSIONS."""
@@ -83,7 +83,7 @@ def cleanup_old_sessions():
             del session_timers[oldest_session]
 
 def schedule_session_timeout(session_id):
-    """Schedules the browser session to close after 3 minutes (reduced from 5 for memory)."""
+    """Schedules the browser session to close after 5 minutes."""
     global session_timers
     
     # Clean up old sessions if we have too many
@@ -99,8 +99,8 @@ def schedule_session_timeout(session_id):
         if session_id in session_timers:
             del session_timers[session_id]
         
-    # 3 minutes = 180 seconds (reduced from 5 minutes to save memory)
-    timer = threading.Timer(180, timeout_handler)
+    # 5 minutes = 300 seconds (Standard tier has enough memory for longer sessions)
+    timer = threading.Timer(300, timeout_handler)
     session_timers[session_id] = timer
     timer.start()
     print(f"Scheduled session timeout for {session_id} in 3 minutes.")

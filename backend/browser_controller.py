@@ -73,23 +73,16 @@ async def start_session(url: str) -> str:
     if not _browser:
         print("Launching Browser...")
         try:
-            # Memory-optimized browser launch options
+            # Browser launch options optimized for Standard tier (1GB+ RAM)
             _browser = await _playwright.chromium.launch(
                 headless=True,
                 args=[
                     '--no-sandbox',
                     '--disable-dev-shm-usage',  # Reduces shared memory usage
-                    '--disable-gpu',  # Disable GPU to save memory
-                    '--disable-software-rasterizer',  # Disable software rasterization
+                    '--disable-gpu',  # Disable GPU (not needed in headless)
                     '--disable-extensions',  # Disable extensions
-                    '--disable-background-networking',  # Disable background networking
-                    '--disable-background-timer-throttling',  # Disable background timers
-                    '--disable-renderer-backgrounding',  # Disable renderer backgrounding
-                    '--disable-backgrounding-occluded-windows',  # Disable backgrounding
-                    '--disable-ipc-flooding-protection',  # Disable IPC protection
-                    '--memory-pressure-off',  # Turn off memory pressure
-                    '--max_old_space_size=256',  # Limit V8 heap size to 256MB
-                    '--js-flags=--max-old-space-size=256',  # Additional V8 heap limit
+                    '--max_old_space_size=512',  # V8 heap size: 512MB (increased for Standard tier)
+                    '--js-flags=--max-old-space-size=512',  # Additional V8 heap limit
                 ]
             )
         except Exception as e:
@@ -102,7 +95,7 @@ async def start_session(url: str) -> str:
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
                         '--disable-gpu',
-                        '--max_old_space_size=256',
+                        '--max_old_space_size=512',  # Increased for Standard tier
                     ]
                 )
             except Exception as e2:
