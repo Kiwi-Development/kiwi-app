@@ -23,6 +23,13 @@ export interface AgentContext {
     name: string;
     role: string;
     description?: string;
+    // Full persona attributes for persona-specific analysis
+    goals?: string[];
+    behaviors?: string[];
+    frustrations?: string[];
+    constraints?: string[];
+    accessibility?: string[];
+    tags?: string[];
   };
   currentProgress?: number;
   history?: Array<{ role: string; content?: string }>;
@@ -165,11 +172,32 @@ export function formatContextForAgent(context: AgentContext): string {
     formatted += `${i + 1}. ${task}\n`;
   });
 
-  // Persona
-  formatted += `\nPersona: ${context.persona.name} (${context.persona.role})\n`;
+  // Persona - FULL DETAILS for persona-specific analysis
+  formatted += `\n=== PERSONA CONTEXT (CRITICAL FOR ANALYSIS) ===\n`;
+  formatted += `Name: ${context.persona.name}\n`;
+  formatted += `Role: ${context.persona.role}\n`;
   if (context.persona.description) {
-    formatted += `Context: ${context.persona.description}\n`;
+    formatted += `Description: ${context.persona.description}\n`;
   }
+  if (context.persona.goals && context.persona.goals.length > 0) {
+    formatted += `Goals: ${context.persona.goals.join(', ')}\n`;
+  }
+  if (context.persona.behaviors && context.persona.behaviors.length > 0) {
+    formatted += `Behaviors: ${context.persona.behaviors.join(', ')}\n`;
+  }
+  if (context.persona.frustrations && context.persona.frustrations.length > 0) {
+    formatted += `Frustrations: ${context.persona.frustrations.join(', ')}\n`;
+  }
+  if (context.persona.constraints && context.persona.constraints.length > 0) {
+    formatted += `Constraints: ${context.persona.constraints.join(', ')}\n`;
+  }
+  if (context.persona.accessibility && context.persona.accessibility.length > 0) {
+    formatted += `Accessibility Needs: ${context.persona.accessibility.join(', ')}\n`;
+  }
+  if (context.persona.tags && context.persona.tags.length > 0) {
+    formatted += `Tags: ${context.persona.tags.join(', ')}\n`;
+  }
+  formatted += `\n`;
 
   return formatted;
 }

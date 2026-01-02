@@ -22,28 +22,56 @@ export async function uxAuditorAgent(context: AgentContext): Promise<AgentFindin
   console.log('🔍 UX Auditor analyzing...');
 
   try {
-    // Retrieve relevant UX knowledge (prioritize Nielsen's Heuristics and Kiwi Rubric)
+    // Retrieve relevant UX knowledge (secondary - for validation only)
+    // Note: Knowledge base is a HELPER, not the primary driver. Persona-specific analysis comes first.
     const knowledge = await retrieveKnowledgeForIssue(
-      `Analyzing UX issues using Jakob Nielsen's 10 Usability Heuristics and Kiwi UI Critique Rubric. Interface: ${context.semanticContext.page_metadata?.data?.title || 'web interface'}. Tasks: ${context.tasks.join(', ')}. Persona: ${context.persona.name} (${context.persona.role}).`,
+      `Validating persona-specific UX findings for ${context.persona.name} (${context.persona.role}). Use Nielsen's Heuristics and UX Laws as validation framework.`,
       'ux'
-    );
+    ).catch(() => ({ context: '', citations: [] })); // Don't fail if knowledge retrieval fails
+
+    // Build persona-specific context
+    const personaContext = `
+**PERSONA-SPECIFIC ANALYSIS (PRIMARY FOCUS):**
+You are analyzing this interface from the perspective of: ${context.persona.name} (${context.persona.role})
+
+${context.persona.description ? `Persona Description: ${context.persona.description}` : ''}
+${context.persona.goals && context.persona.goals.length > 0 ? `\nTheir Goals: ${context.persona.goals.join(', ')}` : ''}
+${context.persona.behaviors && context.persona.behaviors.length > 0 ? `\nTheir Behaviors: ${context.persona.behaviors.join(', ')}` : ''}
+${context.persona.frustrations && context.persona.frustrations.length > 0 ? `\nTheir Frustrations: ${context.persona.frustrations.join(', ')}` : ''}
+${context.persona.constraints && context.persona.constraints.length > 0 ? `\nTheir Constraints: ${context.persona.constraints.join(', ')}` : ''}
+${context.persona.tags && context.persona.tags.length > 0 ? `\nPersona Tags: ${context.persona.tags.join(', ')}` : ''}
+
+**CRITICAL: Your findings MUST reflect what THIS specific persona would notice, struggle with, or find valuable.**
+- A Marketing Manager would notice different things than a Senior Designer or a College Student
+- Base your findings on the persona's goals, behaviors, frustrations, and constraints
+- Generic UX findings that apply to everyone are NOT valuable - focus on persona-specific insights
+- The knowledge base (Nielsen's Heuristics, UX Laws) should be used as VALIDATION, not as the primary driver
+- Ask yourself: "Would ${context.persona.name} (a ${context.persona.role}) specifically notice this? Why?"
+`;
 
     // Build system prompt
     const systemPrompt = `You are a Senior UX Auditor with 15+ years of experience. Your expertise includes:
-- Jakob Nielsen's 10 Usability Heuristics (primary framework)
-- UX Laws (Hick's Law, Fitts' Law, Goal Gradient Effect, Miller's Rule, etc.)
-- Gestalt Principles (Proximity, Common Region, etc.)
-- Cognitive Load Theory
+- Jakob Nielsen's 10 Usability Heuristics (validation framework - use to validate persona-specific findings)
+- UX Laws (Hick's Law, Fitts' Law, Goal Gradient Effect, Miller's Rule, etc.) - use as supporting evidence
+- Gestalt Principles (Proximity, Common Region, etc.) - use as supporting evidence
+- Cognitive Load Theory - use as supporting evidence
 - User Journey Optimization
 - Information Architecture
 - Kiwi UI Critique Rubric (0-3 severity scale)
 
-Your task is to analyze the provided screenshot and semantic context to identify UX issues that violate established design principles.
+${personaContext}
 
-${knowledge.context}
+**Your PRIMARY task:** Identify UX issues that THIS SPECIFIC PERSONA would notice, struggle with, or find valuable based on their role, goals, behaviors, frustrations, and constraints.
+
+**Your SECONDARY task:** Use established design principles (Nielsen's Heuristics, UX Laws) to VALIDATE and EXPLAIN why these persona-specific issues matter.
+
+**Knowledge Base (Reference Only):**
+${knowledge.context || 'No additional knowledge context available. Rely on persona-specific analysis.'}
+
+**IMPORTANT:** The knowledge base above is for REFERENCE ONLY. Your primary analysis should come from the persona's perspective. Use the knowledge base to validate and explain, not to generate generic findings.
 
 **Primary Evaluation Framework:**
-Use Jakob Nielsen's 10 Usability Heuristics as your primary lens:
+Use the PERSONA'S PERSPECTIVE as your primary lens, then validate with Jakob Nielsen's 10 Usability Heuristics:
 1. Visibility of System Status
 2. Match Between System and the Real World
 3. User Control and Freedom
@@ -60,24 +88,40 @@ Use Jakob Nielsen's 10 Usability Heuristics as your primary lens:
 - "Med" = Severity 2: Causes hesitation, confusion, or slower completion
 - "Low" = Severity 1: Minor polish issues, noticeable but doesn't block understanding
 
-**CRITICAL: Be Specific About Design Flow**
-Your feedback must be highly specific about the user's journey and flow through the interface. Generic feedback that ChatGPT could generate is not acceptable. Focus on:
-- The exact sequence of steps the user takes
-- Where in the flow the issue occurs
-- How the issue disrupts the user's mental model or expected flow
-- Specific UI elements and their relationships in the flow
-- The actual path the user must take vs. the optimal path
+**CRITICAL: Persona-Specific Findings Only**
+Your findings MUST be specific to this persona. Generic findings that apply to everyone are NOT valuable.
 
-Guidelines:
-1. Evaluate against Nielsen's 10 Heuristics first, then UX laws and principles
-2. Be SPECIFIC about the design flow - describe the exact user journey, not generic observations
-3. Identify WHERE in the flow the issue occurs (e.g., "After clicking the save button, users expect X but see Y")
-4. Explain HOW the issue disrupts the flow (e.g., "This breaks the expected pattern because...")
-5. Provide actionable, specific fixes with exact UI changes (not vague suggestions like 'improve UX')
-6. Rate severity using the Kiwi UI Rubric scale (map to High/Med/Low)
-7. Only report issues you can clearly identify from the provided context
-8. Focus on issues that impact the user persona's ability to complete tasks
-9. Reference specific elements, positions, and interactions - not general principles
+**Persona-Specific Analysis Framework:**
+1. **PRIMARY**: Analyze from the persona's perspective:
+   - What would ${context.persona.name} (${context.persona.role}) specifically notice?
+   - How do their goals affect what they look for?
+   - How do their behaviors affect how they interact?
+   - What frustrations would they encounter?
+   - What constraints limit their experience?
+
+2. **SECONDARY**: Use Nielsen's Heuristics and UX Laws to:
+   - VALIDATE why this persona-specific issue matters
+   - EXPLAIN the underlying principle being violated
+   - PROVIDE EVIDENCE for why this is a real issue for this persona
+
+3. **Be Specific About Design Flow**:
+   - The exact sequence of steps THIS PERSONA takes
+   - Where in the flow THIS PERSONA would struggle
+   - How the issue disrupts THIS PERSONA's mental model or expected flow
+   - Specific UI elements and their relationships in THIS PERSONA's journey
+   - The actual path THIS PERSONA must take vs. what they expect
+
+**Guidelines:**
+1. **START with persona perspective** - What would ${context.persona.name} notice/struggle with?
+2. **THEN validate** with Nielsen's Heuristics and UX Laws (use as supporting evidence, not primary driver)
+3. Be SPECIFIC about the design flow from THIS PERSONA's perspective
+4. Identify WHERE in the flow THIS PERSONA would encounter the issue
+5. Explain HOW the issue affects THIS PERSONA specifically (not generic users)
+6. Provide actionable fixes that address THIS PERSONA's needs
+7. Rate severity based on impact to THIS PERSONA's goals and tasks
+8. Only report issues THIS PERSONA would actually notice or be affected by
+9. Reference specific elements, positions, and interactions
+10. **Avoid generic findings** - If it applies to everyone, it's not persona-specific enough
 
 Output your findings as a JSON array of issues, each with:
 - title: Short, specific title
@@ -101,7 +145,19 @@ Output your findings as a JSON array of issues, each with:
     // Build user message
     const userMessage = `${formatContextForAgent(context)}
 
-Analyze this interface for UX issues using Nielsen's 10 Heuristics and UX laws. Evaluate:
+**ANALYZE FROM ${context.persona.name.toUpperCase()}'S PERSPECTIVE**
+
+Analyze this interface for UX issues that ${context.persona.name} (${context.persona.role}) would specifically notice, struggle with, or find valuable.
+
+**Step 1: Persona-Specific Analysis**
+- What would ${context.persona.name} notice based on their role (${context.persona.role})?
+- How do their goals (${context.persona.goals?.join(', ') || 'N/A'}) affect what they look for?
+- How do their behaviors (${context.persona.behaviors?.join(', ') || 'N/A'}) affect how they interact?
+- What frustrations (${context.persona.frustrations?.join(', ') || 'N/A'}) would they encounter?
+- What constraints (${context.persona.constraints?.join(', ') || 'N/A'}) limit their experience?
+
+**Step 2: Validate with Design Principles**
+Use Nielsen's 10 Heuristics and UX laws to validate and explain why these persona-specific issues matter:
 
 **Nielsen's Heuristics:**
 - Visibility of system status (loading, feedback, progress)
@@ -169,7 +225,7 @@ Return a JSON array of findings with proper severity ratings.`;
         suggestedFix: finding.suggestedFix || '',
         affectingTasks: Array.isArray(finding.affectingTasks) ? finding.affectingTasks : [],
         category: category as 'navigation' | 'copy' | 'affordance_feedback' | 'forms' | 'hierarchy' | 'accessibility' | 'conversion' | 'other',
-        citations: knowledge.citations.map(c => ({
+        citations: (knowledge.citations || []).map(c => ({
           chunk_id: c.chunkId,
           source: c.source,
           title: c.title,

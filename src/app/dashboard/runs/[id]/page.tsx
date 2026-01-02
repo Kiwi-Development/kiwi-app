@@ -338,25 +338,40 @@ export default function LiveRunPage() {
       }
       const sessionId = startData.sessionId;
 
-      // Wait for server to be ready (reduced wait time)
+      // Wait for server to be ready (optimized: check immediately, then with exponential backoff)
       let serverReady = false;
-      const maxHealthChecks = 10; // Reduced from 50
-      const healthCheckInterval = 1000; // Reduced from 2000ms
+      const maxHealthChecks = 5; // Reduced from 10
 
-      for (let i = 0; i < maxHealthChecks; i++) {
-        await new Promise((r) => setTimeout(r, healthCheckInterval));
-        try {
-          const healthCheck = await proxyScreenshot(sessionId);
-          if (healthCheck.status === "ok") {
-            serverReady = true;
-            break;
+      // First check immediately (session might already be ready)
+      try {
+        const immediateCheck = await proxyScreenshot(sessionId);
+        if (immediateCheck.status === "ok") {
+          serverReady = true;
+        }
+      } catch {
+        // Continue to retry loop
+      }
+
+      // If not ready, retry with shorter intervals
+      if (!serverReady) {
+        for (let i = 0; i < maxHealthChecks; i++) {
+          // Exponential backoff: 200ms, 400ms, 800ms, 1600ms, 2000ms
+          const waitTime = Math.min(200 * Math.pow(2, i), 2000);
+          await new Promise((r) => setTimeout(r, waitTime));
+
+          try {
+            const healthCheck = await proxyScreenshot(sessionId);
+            if (healthCheck.status === "ok") {
+              serverReady = true;
+              break;
+            }
+            // If session not found, it might not be ready yet, continue waiting
+            if (healthCheck.code === "SESSION_NOT_FOUND" && i < maxHealthChecks - 1) {
+              continue;
+            }
+          } catch {
+            // Continue waiting
           }
-          // If session not found, it might not be ready yet, continue waiting
-          if (healthCheck.code === "SESSION_NOT_FOUND" && i < maxHealthChecks - 1) {
-            continue;
-          }
-        } catch {
-          // Continue waiting
         }
       }
 
@@ -592,6 +607,20 @@ export default function LiveRunPage() {
                   const personaRole =
                     selectedPersonaData?.role || selectedPersonaData?.variant || "User";
 
+                  // Get full persona attributes for persona-specific analysis
+                  const personaAttributes = selectedPersonaData?.attributes || {};
+                  const fullPersona = {
+                    name: personaName,
+                    role: personaRole,
+                    description: selectedPersonaData?.attributes?.description || null,
+                    goals: (personaAttributes.goals as string[]) || [],
+                    behaviors: (personaAttributes.behaviors as string[]) || [],
+                    frustrations: (personaAttributes.frustrations as string[]) || [],
+                    constraints: (personaAttributes.constraints as string[]) || [],
+                    accessibility: (personaAttributes.accessibility as string[]) || [],
+                    tags: (personaAttributes.tags as string[]) || [],
+                  };
+
                   const reasoningResponse = await fetch(`/dashboard/runs/${testId}/reasoning`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -599,11 +628,7 @@ export default function LiveRunPage() {
                       screenshot: b64,
                       semanticContext: runSemanticContext,
                       tasks,
-                      persona: {
-                        name: personaName,
-                        role: personaRole,
-                        description: selectedPersonaData?.attributes?.description || null,
-                      },
+                      persona: fullPersona,
                       currentProgress: runCurrentProgress,
                       useReasoningEngine: true,
                     }),
@@ -950,32 +975,47 @@ export default function LiveRunPage() {
           logs: [...prev.logs, { t: Date.now(), text: "Waiting for server to be ready..." }],
         }));
 
+        // Optimized health check: immediate check, then exponential backoff
         let serverReady = false;
-        const maxHealthChecks = 10; // Reduced from 50 - 10 * 1s = 10 seconds max wait
-        const healthCheckInterval = 1000; // Reduced from 2000ms to 1 second
+        const maxHealthChecks = 5; // Reduced from 10
 
-        for (let i = 0; i < maxHealthChecks; i++) {
-          // FIX: Check execution ID during wait
-          if (activeExecutionIdRef.current !== executionId) return;
+        // First check immediately
+        try {
+          const immediateCheck = await proxyScreenshot(sessionId);
+          if (immediateCheck.status === "ok") {
+            serverReady = true;
+          }
+        } catch {
+          // Continue to retry loop
+        }
 
-          await new Promise((r) => setTimeout(r, healthCheckInterval));
+        // If not ready, retry with exponential backoff
+        if (!serverReady) {
+          for (let i = 0; i < maxHealthChecks; i++) {
+            // FIX: Check execution ID during wait
+            if (activeExecutionIdRef.current !== executionId) return;
 
-          try {
-            // Use Server Action for screenshot/health check
-            const healthCheck = await proxyScreenshot(sessionId);
+            // Exponential backoff: 200ms, 400ms, 800ms, 1600ms, 2000ms
+            const waitTime = Math.min(200 * Math.pow(2, i), 2000);
+            await new Promise((r) => setTimeout(r, waitTime));
 
-            if (healthCheck.status === "ok") {
-              serverReady = true;
-              break;
+            try {
+              // Use Server Action for screenshot/health check
+              const healthCheck = await proxyScreenshot(sessionId);
+
+              if (healthCheck.status === "ok") {
+                serverReady = true;
+                break;
+              }
+
+              // If session not found (410), the session might not be ready yet, continue waiting
+              if (healthCheck.code === "SESSION_NOT_FOUND" && i < maxHealthChecks - 1) {
+                // Session might not be created yet, continue waiting
+                continue;
+              }
+            } catch {
+              // Server not ready yet, continue waiting
             }
-
-            // If session not found (410), the session might not be ready yet, continue waiting
-            if (healthCheck.code === "SESSION_NOT_FOUND" && i < maxHealthChecks - 1) {
-              // Session might not be created yet, continue waiting
-              continue;
-            }
-          } catch {
-            // Server not ready yet, continue waiting
           }
         }
 
@@ -1643,6 +1683,30 @@ export default function LiveRunPage() {
                 ) {
                   console.log("🎯 Enhancing findings with reasoning engine...");
 
+                  // Get full persona attributes for persona-specific analysis
+                  const personaAttributes = personaData?.attributes || selectedPersona || {};
+                  const fullPersona = {
+                    name: personaName,
+                    role: personaRole,
+                    description: personaData?.attributes?.description || null,
+                    goals: (personaAttributes.goals as string[]) || selectedPersona?.goals || [],
+                    behaviors:
+                      (personaAttributes.behaviors as string[]) || selectedPersona?.behaviors || [],
+                    frustrations:
+                      (personaAttributes.frustrations as string[]) ||
+                      selectedPersona?.frustrations ||
+                      [],
+                    constraints:
+                      (personaAttributes.constraints as string[]) ||
+                      selectedPersona?.constraints ||
+                      [],
+                    accessibility:
+                      (personaAttributes.accessibility as string[]) ||
+                      selectedPersona?.accessibility ||
+                      [],
+                    tags: (personaAttributes.tags as string[]) || selectedPersona?.tags || [],
+                  };
+
                   const reasoningResponse = await fetch(`/dashboard/runs/${testId}/reasoning`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -1650,11 +1714,7 @@ export default function LiveRunPage() {
                       screenshot: b64,
                       semanticContext: semanticContextRef.current,
                       tasks: test?.testData?.tasks || [],
-                      persona: {
-                        name: personaName,
-                        role: personaRole,
-                        description: personaData?.attributes?.description || null,
-                      },
+                      persona: fullPersona,
                       currentProgress,
                       useReasoningEngine: true,
                     }),

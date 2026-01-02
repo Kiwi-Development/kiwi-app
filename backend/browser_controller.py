@@ -119,23 +119,30 @@ async def start_session(url: str) -> str:
     
     await page.route('**/*', route_handler)
     
-    # Set longer timeout for Figma prototypes which can take time to load
-    page.set_default_timeout(120000)  # 2 minutes
+    # Set timeout for Figma prototypes
+    page.set_default_timeout(60000)  # 1 minute (reduced from 2 minutes)
     
+    # For Figma prototypes, use 'domcontentloaded' first (fastest)
+    # Figma constantly loads resources, so 'networkidle' may never trigger
     try:
-        # Try with networkidle first (more reliable for interactive content)
-        await page.goto(url, wait_until="networkidle", timeout=120000)
+        # Start with 'domcontentloaded' - fastest, good enough for Figma
+        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        # Give a brief moment for initial rendering (Figma needs this)
+        await asyncio.sleep(1)  # Reduced from 2 seconds
     except Exception as e:
-        print(f"Navigation with networkidle timed out, trying with 'load' instead: {e}")
+        print(f"Navigation with domcontentloaded failed, trying 'load' instead: {e}")
         try:
-            # Fallback to 'load' which is less strict
-            await page.goto(url, wait_until="load", timeout=120000)
+            # Fallback to 'load' if domcontentloaded fails
+            await page.goto(url, wait_until="load", timeout=60000)
         except Exception as e2:
-            print(f"Navigation with 'load' also failed, trying 'domcontentloaded': {e2}")
-            # Last resort: just wait for DOM to be ready
-            await page.goto(url, wait_until="domcontentloaded", timeout=120000)
-            # Give it a moment for any initial rendering
-            await asyncio.sleep(2)
+            print(f"Navigation with 'load' also failed, trying 'networkidle' as last resort: {e2}")
+            # Last resort: try networkidle (slowest, but most reliable)
+            try:
+                await page.goto(url, wait_until="networkidle", timeout=30000)  # Shorter timeout for networkidle
+            except Exception as e3:
+                print(f"All navigation strategies failed: {e3}")
+                # If all fail, at least we tried - the page might still be usable
+                raise
     
     _sessions[session_id] = page
     print(f"Session {session_id} started successfully.")
@@ -197,36 +204,38 @@ async def click_at(session_id: str, x: int, y: int) -> bool:
         # Try to find clickable element using Playwright's element detection
         # This works better with iframes and cross-origin content
         try:
-            # Use Playwright's locator to find element at point
-            # This handles iframes automatically
+            # Use evaluate_handle to get element at point
             element_handle = await page.evaluate_handle(f"""
                 () => {{
                     return document.elementFromPoint({x}, {y});
                 }}
             """)
             
-            if element_handle and await element_handle.as_element():
-                # Try to get bounding box of the element
-                try:
-                    box = await element_handle.bounding_box()
-                    if box:
-                        # Use center of element for more reliable clicking
-                        actual_x = int(box['x'] + box['width'] / 2)
-                        actual_y = int(box['y'] + box['height'] / 2)
-                        print(f"Found element, clicking center at ({actual_x}, {actual_y}) instead of ({x}, {y})")
-                        
-                        # Try to click the element directly (more reliable)
-                        try:
-                            await element_handle.click(timeout=5000)
-                            print(f"Successfully clicked element directly")
-                            # Still show visual indicator
-                            await _show_click_indicator(page, x, y, actual_x, actual_y)
-                            return True
-                        except Exception as click_err:
-                            print(f"Element click failed, falling back to coordinate: {click_err}")
-                            # Fall through to coordinate click
-                except Exception as box_err:
-                    print(f"Could not get bounding box: {box_err}")
+            # Check if we got a valid handle and convert to ElementHandle
+            if element_handle:
+                element = element_handle.as_element()
+                if element:
+                    # Try to get bounding box of the element
+                    try:
+                        box = await element.bounding_box()
+                        if box:
+                            # Use center of element for more reliable clicking
+                            actual_x = int(box['x'] + box['width'] / 2)
+                            actual_y = int(box['y'] + box['height'] / 2)
+                            print(f"Found element, clicking center at ({actual_x}, {actual_y}) instead of ({x}, {y})")
+                            
+                            # Try to click the element directly (more reliable)
+                            try:
+                                await element.click(timeout=5000)
+                                print(f"Successfully clicked element directly")
+                                # Still show visual indicator
+                                await _show_click_indicator(page, x, y, actual_x, actual_y)
+                                return True
+                            except Exception as click_err:
+                                print(f"Element click failed, falling back to coordinate: {click_err}")
+                                # Fall through to coordinate click
+                    except Exception as box_err:
+                        print(f"Could not get bounding box: {box_err}")
         except Exception as elem_err:
             print(f"Could not find element at point: {elem_err}")
         
@@ -322,12 +331,26 @@ async def take_screenshot(session_id: str) -> bytes:
     global _sessions
     page = _sessions.get(session_id)
     
-    if page and not page.is_closed():
-        print(f"Taking screenshot for session {session_id}...")
-        return await page.screenshot()
-    else:
+    if not page or page.is_closed():
         print(f"Error: Session {session_id} not found or closed.")
-        return b""
+        raise ValueError(f"Session {session_id} not found or closed")
+    
+    try:
+        print(f"Taking screenshot for session {session_id}...")
+        # Add timeout to screenshot to prevent hanging
+        screenshot_bytes = await asyncio.wait_for(
+            page.screenshot(),
+            timeout=10.0  # 10 second timeout
+        )
+        return screenshot_bytes
+    except asyncio.TimeoutError:
+        print(f"Error: Screenshot timeout for session {session_id}")
+        raise ValueError(f"Screenshot timeout for session {session_id}")
+    except Exception as e:
+        print(f"Error taking screenshot for session {session_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 async def extract_context(session_id: str) -> dict:
     """
