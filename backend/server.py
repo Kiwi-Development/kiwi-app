@@ -67,6 +67,11 @@ session_timers = {}
 # Set to 4 for Standard tier (1GB+ RAM) - can handle more concurrent users
 MAX_CONCURRENT_SESSIONS = 4
 
+def is_session_valid(session_id: str) -> bool:
+    """Check if a session exists in the sessions dictionary."""
+    import browser_controller
+    return session_id in browser_controller._sessions and browser_controller._sessions[session_id] is not None
+
 def cleanup_old_sessions():
     """Closes the oldest sessions if we exceed MAX_CONCURRENT_SESSIONS."""
     global session_timers
@@ -82,28 +87,62 @@ def cleanup_old_sessions():
         if oldest_session in session_timers:
             del session_timers[oldest_session]
 
-def schedule_session_timeout(session_id):
-    """Schedules the browser session to close after 5 minutes."""
+def schedule_session_timeout(session_id, reset_existing=False, start_immediately=True):
+    """Schedules the browser session to close after a timeout period.
+    
+    Args:
+        session_id: The session ID to schedule timeout for
+        reset_existing: If True, reset the timeout for an existing session
+        start_immediately: If False, don't start the timer yet (wait for first activity)
+    """
     global session_timers
     
-    # Clean up old sessions if we have too many
-    cleanup_old_sessions()
+    # Verify session exists before scheduling timeout
+    if session_id not in browser_controller._sessions:
+        logger.warning(f"Cannot schedule timeout for session {session_id} - session not found in _sessions")
+        return
     
-    # Cancel existing timer if any (though for a new session ID this shouldn't happen)
+    # Clean up old sessions if we have too many (but only if we're adding a new session)
+    if not reset_existing:
+        cleanup_old_sessions()
+    
+    # Handle existing timer
     if session_id in session_timers:
+        if not reset_existing:
+            # If timer exists and we're not resetting, check if it's running
+            # If it's not running (was created but never started), start it now
+            existing_timer = session_timers[session_id]
+            if not existing_timer.is_alive() and start_immediately:
+                existing_timer.start()
+                timeout_minutes = int(os.getenv("SESSION_TIMEOUT_SECONDS", "3600")) // 60
+                print(f"Started existing timeout timer for {session_id} (will timeout in {timeout_minutes} minutes).")
+            return  # Don't reset if not requested
+        # Cancel existing timer before creating new one
         session_timers[session_id].cancel()
         
     def timeout_handler():
         print(f"Session {session_id} timed out. Closing browser tab...")
-        run_async(browser_controller.close_session(session_id))
+        # Double-check session still exists before closing
+        if session_id in browser_controller._sessions:
+            run_async(browser_controller.close_session(session_id))
         if session_id in session_timers:
             del session_timers[session_id]
         
-    # 5 minutes = 300 seconds (Standard tier has enough memory for longer sessions)
-    timer = threading.Timer(300, timeout_handler)
+    # Get timeout from environment variable (default: 60 minutes for longer simulations)
+    # Increased from 30 to 60 minutes to handle longer test runs and initialization delays
+    timeout_seconds = int(os.getenv("SESSION_TIMEOUT_SECONDS", "3600"))  # 60 minutes default
+    
+    timer = threading.Timer(timeout_seconds, timeout_handler)
     session_timers[session_id] = timer
-    timer.start()
-    print(f"Scheduled session timeout for {session_id} in 3 minutes.")
+    
+    # Only start the timer if requested (for new sessions, wait until first activity)
+    if start_immediately:
+        timer.start()
+        timeout_minutes = timeout_seconds // 60
+        print(f"Scheduled session timeout for {session_id} in {timeout_minutes} minutes ({timeout_seconds}s).")
+    else:
+        # Timer is created but not started - will be started on first activity
+        print(f"Session timeout timer created for {session_id} (will start on first activity).")
 
 # Pydantic models for request validation
 class StartSessionRequest(BaseModel):
@@ -209,7 +248,24 @@ async def start_session(request: StartSessionRequest):
         
         print(f"Starting new session with URL: {url} (active sessions: {len(session_timers)})")
         session_id = run_async(browser_controller.start_session(url))
-        schedule_session_timeout(session_id)
+        
+        # Verify session was actually created before scheduling timeout
+        if session_id not in browser_controller._sessions:
+            logger.error(f"Session {session_id} was not properly created in _sessions dictionary")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "status": "error",
+                    "message": "Session was created but not properly initialized. Please try again.",
+                    "code": "SESSION_INIT_FAILED"
+                }
+            )
+        
+        # Schedule timeout with a grace period - don't start counting until first use
+        # This prevents sessions from timing out during initialization
+        # The timeout will be properly started on first activity (screenshot/click)
+        schedule_session_timeout(session_id, start_immediately=False)
+        logger.info(f"Session {session_id} started (timeout will start on first activity, active sessions: {len(session_timers)})")
         return {"status": "ok", "message": "Session started", "sessionId": session_id}
     except HTTPException:
         raise
@@ -225,9 +281,17 @@ async def click(request: ClickRequest):
     session_id = request.sessionId
     
     try:
-        # Check if session exists before attempting click
-        if session_id not in browser_controller._sessions:
-            logger.warning(f"Session {session_id} not found for click - may have timed out or been closed")
+        # Reset session timeout on activity (session is being used)
+        # start_immediately=True ensures the timer starts if it wasn't started yet
+        if session_id in session_timers:
+            schedule_session_timeout(session_id, reset_existing=True, start_immediately=True)
+        else:
+            # First activity - start the timeout timer
+            schedule_session_timeout(session_id, reset_existing=False, start_immediately=True)
+        
+        # Check if session exists and is valid before attempting click
+        if not is_session_valid(session_id):
+            logger.warning(f"Session {session_id} not found or invalid for click - may have timed out or been closed")
             raise HTTPException(
                 status_code=410,  # 410 Gone - session no longer exists
                 detail={
@@ -257,10 +321,18 @@ async def screenshot(request: ScreenshotRequest):
     session_id = request.sessionId
 
     try:
-        # Check if session exists before attempting screenshot
+        # Reset session timeout on activity (session is being used)
+        # start_immediately=True ensures the timer starts if it wasn't started yet
+        if session_id in session_timers:
+            schedule_session_timeout(session_id, reset_existing=True, start_immediately=True)
+        else:
+            # First activity - start the timeout timer
+            schedule_session_timeout(session_id, reset_existing=False, start_immediately=True)
+        
+        # Check if session exists and is valid before attempting screenshot
         import browser_controller
-        if session_id not in browser_controller._sessions:
-            logger.warning(f"Session {session_id} not found - may have timed out or been closed")
+        if not is_session_valid(session_id):
+            logger.warning(f"Session {session_id} not found or invalid - may have timed out or been closed")
             raise HTTPException(
                 status_code=410,  # 410 Gone - session no longer exists
                 detail={

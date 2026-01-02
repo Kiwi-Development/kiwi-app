@@ -49,8 +49,9 @@ export async function startSession(url: string, retryCount = 0): Promise<any> {
     console.log(`[Proxy] Computed BASE_URL: ${BASE_URL}`);
 
     const controller = new AbortController();
-    // Timeout: 120 seconds (Starter tier has no cold starts, but Playwright operations can take time)
-    const timeout = 120000;
+    // Timeout: 180 seconds (increased to handle browser installation and slow navigation)
+    // Playwright operations (browser launch, page navigation) can take time, especially on first run
+    const timeout = 180000;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {

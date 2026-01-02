@@ -105,48 +105,63 @@ async def start_session(url: str) -> str:
     session_id = str(uuid.uuid4())
     print(f"Opening new page for session {session_id} and navigating to {url}...")
     
-    page = await _browser.new_page()
-    
-    # Memory-optimized page settings
-    # Block only heavy media resources (videos, large images) but allow essential resources
-    async def route_handler(route):
-        resource_type = route.request.resource_type
-        # Block only heavy media, allow everything else (including stylesheets for proper rendering)
-        if resource_type in ['media']:  # Block videos/audio only
-            await route.abort()
-        else:
-            await route.continue_()
-    
-    await page.route('**/*', route_handler)
-    
-    # Set timeout for Figma prototypes
-    page.set_default_timeout(60000)  # 1 minute (reduced from 2 minutes)
-    
-    # For Figma prototypes, use 'domcontentloaded' first (fastest)
-    # Figma constantly loads resources, so 'networkidle' may never trigger
+    page = None
     try:
-        # Start with 'domcontentloaded' - fastest, good enough for Figma
-        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        # Give a brief moment for initial rendering (Figma needs this)
-        await asyncio.sleep(1)  # Reduced from 2 seconds
-    except Exception as e:
-        print(f"Navigation with domcontentloaded failed, trying 'load' instead: {e}")
+        page = await _browser.new_page()
+        
+        # Memory-optimized page settings
+        # Block only heavy media resources (videos, large images) but allow essential resources
+        async def route_handler(route):
+            resource_type = route.request.resource_type
+            # Block only heavy media, allow everything else (including stylesheets for proper rendering)
+            if resource_type in ['media']:  # Block videos/audio only
+                await route.abort()
+            else:
+                await route.continue_()
+        
+        await page.route('**/*', route_handler)
+        
+        # Set timeout for Figma prototypes
+        page.set_default_timeout(60000)  # 1 minute (reduced from 2 minutes)
+        
+        # For Figma prototypes, use 'domcontentloaded' first (fastest)
+        # Figma constantly loads resources, so 'networkidle' may never trigger
         try:
-            # Fallback to 'load' if domcontentloaded fails
-            await page.goto(url, wait_until="load", timeout=60000)
-        except Exception as e2:
-            print(f"Navigation with 'load' also failed, trying 'networkidle' as last resort: {e2}")
-            # Last resort: try networkidle (slowest, but most reliable)
+            # Start with 'domcontentloaded' - fastest, good enough for Figma
+            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            # Give a brief moment for initial rendering (Figma needs this)
+            await asyncio.sleep(1)  # Reduced from 2 seconds
+        except Exception as e:
+            print(f"Navigation with domcontentloaded failed, trying 'load' instead: {e}")
             try:
-                await page.goto(url, wait_until="networkidle", timeout=30000)  # Shorter timeout for networkidle
-            except Exception as e3:
-                print(f"All navigation strategies failed: {e3}")
-                # If all fail, at least we tried - the page might still be usable
-                raise
-    
-    _sessions[session_id] = page
-    print(f"Session {session_id} started successfully.")
-    return session_id
+                # Fallback to 'load' if domcontentloaded fails
+                await page.goto(url, wait_until="load", timeout=60000)
+            except Exception as e2:
+                print(f"Navigation with 'load' also failed, trying 'networkidle' as last resort: {e2}")
+                # Last resort: try networkidle (slowest, but most reliable)
+                try:
+                    await page.goto(url, wait_until="networkidle", timeout=30000)  # Shorter timeout for networkidle
+                except Exception as e3:
+                    print(f"All navigation strategies failed: {e3}")
+                    # If all fail, at least we tried - the page might still be usable
+                    # Don't raise - continue and add session anyway, page might still work
+                    pass
+        
+        # Add session to dictionary BEFORE returning (critical for race condition prevention)
+        _sessions[session_id] = page
+        print(f"Session {session_id} started successfully and added to _sessions.")
+        return session_id
+    except Exception as e:
+        # If page was created but something else failed, clean it up
+        if page:
+            try:
+                await page.close()
+            except:
+                pass
+        print(f"Error starting session {session_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 async def close_session(session_id: str):
     """
