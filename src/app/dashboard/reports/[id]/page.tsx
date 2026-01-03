@@ -899,7 +899,7 @@ export default function ReportPage() {
                                   {evidence.persona_quote && (
                                     <div className="p-2 rounded bg-muted/50 border-l-2 border-primary">
                                       <p className="text-xs italic text-muted-foreground">
-                                        "{evidence.persona_quote}"
+                                        &ldquo;{evidence.persona_quote}&rdquo;
                                       </p>
                                     </div>
                                   )}

@@ -1,5 +1,12 @@
 "use server";
 
+import type {
+  SessionStartResponse,
+  ScreenshotResponse,
+  ExtractContextResponse,
+  FigmaMetadataResponse,
+} from "@/types";
+
 // Helper function to get BASE_URL (called at runtime, not module load time)
 function getBaseUrl(): string {
   const host = process.env.NEXT_PUBLIC_EC2_IP || "localhost";
@@ -23,7 +30,7 @@ function getBaseUrl(): string {
   }
 }
 
-export async function startSession(url: string, retryCount = 0): Promise<any> {
+export async function startSession(url: string, retryCount = 0): Promise<SessionStartResponse> {
   console.log(`[Proxy] startSession called with url: ${url}, retryCount: ${retryCount}`);
 
   try {
@@ -49,8 +56,8 @@ export async function startSession(url: string, retryCount = 0): Promise<any> {
     console.log(`[Proxy] Computed BASE_URL: ${BASE_URL}`);
 
     const controller = new AbortController();
-    // Timeout: 180 seconds (increased to handle browser startup and cold starts)
-    const timeout = 180000;
+    // Timeout: 120 seconds (Starter tier has no cold starts, but Playwright operations can take time)
+    const timeout = 120000;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
@@ -181,7 +188,7 @@ export async function proxyClick(sessionId: string, x: number, y: number) {
   }
 }
 
-export async function proxyScreenshot(sessionId: string) {
+export async function proxyScreenshot(sessionId: string): Promise<ScreenshotResponse> {
   const BASE_URL = getBaseUrl();
   try {
     // console.log(`[Proxy] Fetching screenshot for session ${sessionId}`)
@@ -250,7 +257,7 @@ export async function proxyScreenshot(sessionId: string) {
   }
 }
 
-export async function extractContext(sessionId: string) {
+export async function extractContext(sessionId: string): Promise<ExtractContextResponse> {
   const BASE_URL = getBaseUrl();
   try {
     const res = await fetch(`${BASE_URL}/extract-context`, {
@@ -284,7 +291,10 @@ export async function extractContext(sessionId: string) {
   }
 }
 
-export async function fetchFigmaMetadata(url: string, apiToken?: string) {
+export async function fetchFigmaMetadata(
+  url: string,
+  apiToken?: string
+): Promise<FigmaMetadataResponse> {
   const BASE_URL = getBaseUrl();
   try {
     const res = await fetch(`${BASE_URL}/figma-metadata`, {

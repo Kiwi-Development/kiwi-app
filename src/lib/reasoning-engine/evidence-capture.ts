@@ -1,11 +1,10 @@
 /**
  * Evidence Capture Utility
- * 
+ *
  * Captures evidence snippets during test runs for findings
  */
 
-import { EvidenceSnippet } from './orchestrator';
-import type { RunEvent } from '../types';
+import type { EvidenceSnippet, RunEvent } from "@/types";
 
 export interface EvidenceCaptureState {
   currentTask: string;
@@ -43,34 +42,36 @@ export function extractEvidenceFromRun(
 ): EvidenceSnippet {
   // Extract "what happened" steps from recent events (last 2-6 relevant events)
   const relevantEvents = events
-    .filter((e) => e.type === 'click' || e.type === 'submit' || e.type === 'error')
+    .filter((e) => e.type === "click" || e.type === "submit" || e.type === "error")
     .slice(-6); // Get last 6 relevant events
 
   // Build detailed action sequence with click coordinates and context
   const whatHappenedSteps: string[] = [];
-  
+
   relevantEvents.forEach((event, idx) => {
-    if (event.type === 'click') {
-      // Try to get click coordinates from click history
-      // Match by index since events and clicks are created in sequence
-      // or use the most recent click if available
-      const clickInfo = clickHistory && clickHistory.length > 0
-        ? clickHistory[Math.min(idx, clickHistory.length - 1)]
-        : undefined;
-      
+    if (event.type === "click") {
+      // Try to get click coordinates from click history by matching index
+      // Since events and clickHistory should be in sync, match by position
+      const clickInfo =
+        clickHistory && clickHistory.length > idx
+          ? clickHistory[clickHistory.length - relevantEvents.length + idx]
+          : undefined;
+
       if (clickInfo) {
         whatHappenedSteps.push(
-          `Step ${idx + 1}: Clicked at (${clickInfo.x}, ${clickInfo.y}) - ${event.label || event.details || 'interacted with element'}`
+          `Step ${idx + 1}: Clicked at (${clickInfo.x}, ${clickInfo.y}) - ${event.label || event.details || "interacted with element"}`
         );
       } else {
         whatHappenedSteps.push(
-          event.label || `Step ${idx + 1}: Clicked on ${event.details || 'element'}`
+          event.label || `Step ${idx + 1}: Clicked on ${event.details || "element"}`
         );
       }
-    } else if (event.type === 'submit') {
+    } else if (event.type === "submit") {
       whatHappenedSteps.push(event.label || `Step ${idx + 1}: Submitted form`);
-    } else if (event.type === 'error') {
-      whatHappenedSteps.push(event.label || `Step ${idx + 1}: Encountered error: ${event.details || 'Unknown error'}`);
+    } else if (event.type === "error") {
+      whatHappenedSteps.push(
+        event.label || `Step ${idx + 1}: Encountered error: ${event.details || "Unknown error"}`
+      );
     } else {
       whatHappenedSteps.push(event.label || `Step ${idx + 1}: ${event.type}`);
     }
@@ -78,19 +79,19 @@ export function extractEvidenceFromRun(
 
   // If no steps extracted, create default steps
   if (whatHappenedSteps.length === 0) {
-    whatHappenedSteps.push('User interacted with the interface');
-    whatHappenedSteps.push('Issue was encountered during task completion');
+    whatHappenedSteps.push("User interacted with the interface");
+    whatHappenedSteps.push("Issue was encountered during task completion");
   }
 
   // Extract persona quote from agent history (more reliable than events)
   let personaQuote: string | undefined = undefined;
-  
+
   // First, try to get rationale from agent history (tool calls with rationale)
   if (agentHistory) {
     // Look for assistant messages with tool calls that have rationale
     for (let i = agentHistory.length - 1; i >= 0; i--) {
       const msg = agentHistory[i];
-      if (msg.role === 'assistant' && msg.content) {
+      if (msg.role === "assistant" && msg.content) {
         // Try to parse rationale from tool call JSON
         try {
           const toolCallMatch = msg.content.match(/rationale["\s:]+"([^"]+)"/i);
@@ -101,7 +102,7 @@ export function extractEvidenceFromRun(
         } catch {
           // Continue searching
         }
-        
+
         // If no JSON found, use the content directly if it's short and meaningful
         if (!personaQuote && msg.content.length < 200 && msg.content.length > 10) {
           personaQuote = msg.content;
@@ -110,17 +111,17 @@ export function extractEvidenceFromRun(
       }
     }
   }
-  
+
   // Fallback: Extract from event logs
   if (!personaQuote) {
     const logs = events
-      .filter((e) => e.details && (e.details.includes('Agent:') || e.details.includes('rationale')))
+      .filter((e) => e.details && (e.details.includes("Agent:") || e.details.includes("rationale")))
       .map((e) => {
         const match = e.details?.match(/(?:Agent:|rationale["\s:]+")([^"]+)/i);
-        return match ? match[1].trim() : e.details?.replace(/Agent:/, '').trim();
+        return match ? match[1].trim() : e.details?.replace(/Agent:/, "").trim();
       })
       .filter((q) => q && q.length > 0 && q.length < 200);
-    
+
     personaQuote = logs.length > 0 ? logs[logs.length - 1] : undefined;
   }
 
@@ -128,16 +129,16 @@ export function extractEvidenceFromRun(
   if (agentHistory && agentHistory.length > 0) {
     const recentAssistantMessages = agentHistory
       .slice(-5)
-      .filter(m => m.role === 'assistant' && m.content)
-      .map(m => m.content)
-      .filter(c => c && c.length < 300);
-    
+      .filter((m) => m.role === "assistant" && m.content)
+      .map((m) => m.content)
+      .filter((c) => c && c.length < 300);
+
     // If we have context but no quote, use the most recent assistant message
     if (!personaQuote && recentAssistantMessages.length > 0) {
       const lastMessage = recentAssistantMessages[recentAssistantMessages.length - 1];
       if (lastMessage && lastMessage.length > 20) {
         // Extract a meaningful snippet (first sentence or first 100 chars)
-        personaQuote = lastMessage.split('.')[0].substring(0, 150);
+        personaQuote = lastMessage.split(".")[0].substring(0, 150);
       }
     }
   }
@@ -158,22 +159,39 @@ export function extractEvidenceFromRun(
  * Map agent category to finding category
  */
 export function mapAgentCategoryToFindingCategory(
-  agentCategory: 'ux' | 'accessibility' | 'conversion'
-): 'navigation' | 'copy' | 'affordance_feedback' | 'forms' | 'hierarchy' | 'accessibility' | 'conversion' | 'other' {
-  const categoryMap: Record<string, 'navigation' | 'copy' | 'affordance_feedback' | 'forms' | 'hierarchy' | 'accessibility' | 'conversion' | 'other'> = {
-    'ux': 'other', // Will be refined by agent
-    'accessibility': 'accessibility',
-    'conversion': 'conversion',
+  agentCategory: "ux" | "accessibility" | "conversion"
+):
+  | "navigation"
+  | "copy"
+  | "affordance_feedback"
+  | "forms"
+  | "hierarchy"
+  | "accessibility"
+  | "conversion"
+  | "other" {
+  const categoryMap: Record<
+    string,
+    | "navigation"
+    | "copy"
+    | "affordance_feedback"
+    | "forms"
+    | "hierarchy"
+    | "accessibility"
+    | "conversion"
+    | "other"
+  > = {
+    ux: "other", // Will be refined by agent
+    accessibility: "accessibility",
+    conversion: "conversion",
   };
-  return categoryMap[agentCategory] || 'other';
+  return categoryMap[agentCategory] || "other";
 }
 
 /**
  * Map confidence number to confidence level
  */
-export function mapConfidenceToLevel(confidence: number): 'Low' | 'Med' | 'High' {
-  if (confidence >= 70) return 'High';
-  if (confidence >= 40) return 'Med';
-  return 'Low';
+export function mapConfidenceToLevel(confidence: number): "Low" | "Med" | "High" {
+  if (confidence >= 70) return "High";
+  if (confidence >= 40) return "Med";
+  return "Low";
 }
-

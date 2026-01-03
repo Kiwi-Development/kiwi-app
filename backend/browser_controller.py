@@ -73,7 +73,7 @@ async def start_session(url: str) -> str:
     if not _browser:
         print("Launching Browser...")
         try:
-            # Browser launch options optimized for memory-constrained environments
+            # Browser launch options optimized for Standard tier (1GB+ RAM)
             _browser = await _playwright.chromium.launch(
                 headless=True,
                 args=[
@@ -81,16 +81,8 @@ async def start_session(url: str) -> str:
                     '--disable-dev-shm-usage',  # Reduces shared memory usage
                     '--disable-gpu',  # Disable GPU (not needed in headless)
                     '--disable-extensions',  # Disable extensions
-                    '--disable-software-rasterizer',  # Disable software rasterization
-                    '--disable-background-networking',  # Disable background networking
-                    '--disable-background-timer-throttling',  # Disable background timers
-                    '--disable-renderer-backgrounding',  # Disable renderer backgrounding
-                    '--disable-backgrounding-occluded-windows',  # Disable backgrounding
-                    '--disable-features=TranslateUI',  # Disable translation UI
-                    '--disable-ipc-flooding-protection',  # Disable IPC flooding protection
-                    '--memory-pressure-off',  # Turn off memory pressure
-                    '--max_old_space_size=256',  # V8 heap size: 256MB (reduced for memory efficiency)
-                    '--js-flags=--max-old-space-size=256',  # Additional V8 heap limit
+                    '--max_old_space_size=512',  # V8 heap size: 512MB (increased for Standard tier)
+                    '--js-flags=--max-old-space-size=512',  # Additional V8 heap limit
                 ]
             )
         except Exception as e:
@@ -103,8 +95,7 @@ async def start_session(url: str) -> str:
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
                         '--disable-gpu',
-                        '--disable-software-rasterizer',
-                        '--max_old_space_size=256',  # Reduced for memory efficiency
+                        '--max_old_space_size=512',  # Increased for Standard tier
                     ]
                 )
             except Exception as e2:
@@ -117,87 +108,41 @@ async def start_session(url: str) -> str:
     page = await _browser.new_page()
     
     # Memory-optimized page settings
-    # Block heavy resources to reduce memory usage
-    is_figma = 'figma.com' in url
+    # Block only heavy media resources (videos, large images) but allow essential resources
     async def route_handler(route):
         resource_type = route.request.resource_type
-        # Block heavy media (videos/audio)
-        # For Figma, allow fonts as they're needed for proper rendering
-        if resource_type == 'media':  # Block videos/audio only
-            await route.abort()
-        elif resource_type == 'font' and not is_figma:
-            # Block fonts for non-Figma sites to save memory
+        # Block only heavy media, allow everything else (including stylesheets for proper rendering)
+        if resource_type in ['media']:  # Block videos/audio only
             await route.abort()
         else:
             await route.continue_()
     
     await page.route('**/*', route_handler)
     
-    # Set viewport to reasonable size to reduce memory
-    await page.set_viewport_size({"width": 1280, "height": 720})
-    
     # Set timeout for Figma prototypes
-    page.set_default_timeout(45000)  # 45 seconds (reduced for faster failure)
+    page.set_default_timeout(60000)  # 1 minute (reduced from 2 minutes)
     
     # For Figma prototypes, use 'domcontentloaded' first (fastest)
     # Figma constantly loads resources, so 'networkidle' may never trigger
     try:
         # Start with 'domcontentloaded' - fastest, good enough for Figma
-        await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        # Give a brief moment for initial rendering (Figma needs this)
+        await asyncio.sleep(1)  # Reduced from 2 seconds
     except Exception as e:
         print(f"Navigation with domcontentloaded failed, trying 'load' instead: {e}")
         try:
             # Fallback to 'load' if domcontentloaded fails
-            await page.goto(url, wait_until="load", timeout=45000)
+            await page.goto(url, wait_until="load", timeout=60000)
         except Exception as e2:
             print(f"Navigation with 'load' also failed, trying 'networkidle' as last resort: {e2}")
             # Last resort: try networkidle (slowest, but most reliable)
             try:
-                await page.goto(url, wait_until="networkidle", timeout=20000)  # Shorter timeout for networkidle
+                await page.goto(url, wait_until="networkidle", timeout=30000)  # Shorter timeout for networkidle
             except Exception as e3:
                 print(f"All navigation strategies failed: {e3}")
                 # If all fail, at least we tried - the page might still be usable
                 raise
-    
-    # For Figma prototypes, wait for the iframe to load (most are cross-origin so we can't check content)
-    if is_figma:
-        print(f"Waiting for Figma prototype iframe to load...")
-        try:
-            # Wait for iframe to appear and be loaded
-            # Most Figma prototypes use cross-origin iframes, so we can't check their content
-            # Instead, just wait for the iframe to exist and have a src/be loaded
-            await page.wait_for_selector('iframe', timeout=10000, state='attached')
-            
-            # Give the iframe a moment to start loading
-            await asyncio.sleep(0.5)
-            
-            # Try to wait for iframe load event (works for same-origin iframes)
-            # For cross-origin, we'll just wait a short time
-            try:
-                iframes = await page.query_selector_all('iframe')
-                if iframes:
-                    # Wait for iframe to load (this works for same-origin iframes)
-                    # For cross-origin, the load event still fires when the iframe loads
-                    # Use gather with return_exceptions to handle cross-origin gracefully
-                    load_tasks = [iframe.wait_for_load_state('load', timeout=5000) for iframe in iframes]
-                    await asyncio.wait_for(
-                        asyncio.gather(*load_tasks, return_exceptions=True),
-                        timeout=8
-                    )
-            except Exception:
-                # Cross-origin iframe or timeout - that's okay, continue
-                pass
-            
-            # Give it a brief moment for initial render
-            await asyncio.sleep(0.5)
-            print("Figma prototype iframe loaded")
-        except Exception as e:
-            print(f"Warning: Could not wait for Figma iframe: {e}, continuing anyway")
-            # Continue anyway - the page might still be usable
-            await asyncio.sleep(1)
-    else:
-        # For non-Figma pages, just give a brief moment for rendering
-        await asyncio.sleep(0.5)
     
     _sessions[session_id] = page
     print(f"Session {session_id} started successfully.")
@@ -205,25 +150,16 @@ async def start_session(url: str) -> str:
 
 async def close_session(session_id: str):
     """
-    Closes the specified browser session and cleans up resources.
+    Closes the specified browser session.
     """
     global _sessions
     page = _sessions.get(session_id)
     
     if page:
         print(f"Closing session {session_id}...")
-        try:
-            # Close the page to free memory
-            if not page.is_closed():
-                await page.close()
-            # Remove from sessions dict
-            del _sessions[session_id]
-            print(f"Session {session_id} closed and cleaned up.")
-        except Exception as e:
-            print(f"Error closing session {session_id}: {e}")
-            # Still remove from dict even if close failed
-            if session_id in _sessions:
-                del _sessions[session_id]
+        await page.close()
+        del _sessions[session_id]
+        print(f"Session {session_id} closed.")
     else:
         print(f"Session {session_id} not found or already closed.")
 
@@ -398,16 +334,15 @@ async def click_at(session_id: str, x: int, y: int) -> bool:
                                     iframe_y = actual_y - int(iframe_rect['y'])
                                     await frame.mouse.click(iframe_x, iframe_y)
                                     print(f"Successfully clicked within iframe at ({iframe_x}, {iframe_y})")
-                                    # Click indicator disabled - doesn't align with activity logs
-                                    # await _show_click_indicator(page, x, y, actual_x, actual_y)
+                                    await _show_click_indicator(page, x, y, actual_x, actual_y)
                                     return True
                         except:
                             continue
                 except Exception as iframe_err:
                     print(f"Could not click in iframe, falling back to coordinate: {iframe_err}")
         
-        # Click indicator disabled - doesn't align with activity logs
-        # await _show_click_indicator(page, x, y, actual_x, actual_y)
+        # Show visual indicator with smooth animation
+        await _show_click_indicator(page, x, y, actual_x, actual_y)
         
         # Perform the click at the actual coordinates
         await page.mouse.click(actual_x, actual_y)
@@ -574,23 +509,23 @@ async def take_screenshot(session_id: str) -> bytes:
         # Check if page is a Figma prototype (longer timeout needed)
         is_figma = 'figma.com' in page.url
         
-        # Use longer timeout for Figma prototypes (20 seconds) vs regular pages (10 seconds)
-        timeout = 20.0 if is_figma else 10.0
+        # Use longer timeout for Figma prototypes (30 seconds) vs regular pages (15 seconds)
+        timeout = 30.0 if is_figma else 15.0
         
-        # Try to take screenshot with timeout and reduced quality for memory efficiency and speed
+        # Try to take screenshot with timeout
         try:
             screenshot_bytes = await asyncio.wait_for(
-                page.screenshot(full_page=False, quality=50, type='jpeg'),  # JPEG with 50% quality for faster processing
+                page.screenshot(full_page=False),  # full_page=False is faster
                 timeout=timeout
             )
             return screenshot_bytes
         except asyncio.TimeoutError:
-            print(f"Warning: Screenshot timeout ({timeout}s) for session {session_id}, trying with lower quality...")
+            print(f"Warning: Screenshot timeout ({timeout}s) for session {session_id}, trying with reduced quality...")
             
-            # Retry with even lower quality if first attempt times out
+            # Retry with reduced quality/full_page=False if first attempt times out
             try:
                 screenshot_bytes = await asyncio.wait_for(
-                    page.screenshot(full_page=False, quality=35, type='jpeg'),  # Lower quality for speed and memory
+                    page.screenshot(full_page=False, quality=75),  # Reduced quality for speed
                     timeout=timeout
                 )
                 print(f"Successfully took screenshot with reduced quality for session {session_id}")

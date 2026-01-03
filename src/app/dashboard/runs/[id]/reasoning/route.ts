@@ -1,11 +1,14 @@
 /**
  * Reasoning Engine API Route
- * 
+ *
  * Uses the multi-agent reasoning engine to analyze designs
  */
 
 import { NextResponse } from "next/server";
-import { orchestrateAnalysis, AgentContext } from "../../../../../lib/reasoning-engine/orchestrator";
+import {
+  orchestrateAnalysis,
+  AgentContext,
+} from "../../../../../lib/reasoning-engine/orchestrator";
 import { generateDeveloperOutputs } from "../../../../../lib/output-generator/router";
 
 export async function POST(req: Request) {
@@ -46,7 +49,7 @@ export async function POST(req: Request) {
     const result = await orchestrateAnalysis(agentContext);
 
     // Generate developer outputs for each finding
-    const findingsWithOutputs = result.findings.map(finding => {
+    const findingsWithOutputs = result.findings.map((finding) => {
       const outputs = generateDeveloperOutputs(finding);
       return {
         ...finding,
@@ -66,4 +69,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

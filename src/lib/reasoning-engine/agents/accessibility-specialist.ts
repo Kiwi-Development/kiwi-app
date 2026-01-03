@@ -1,14 +1,14 @@
 /**
  * Accessibility Specialist Agent
- * 
+ *
  * Specializes in identifying accessibility issues based on WCAG guidelines
  */
 
-import { OpenAI } from 'openai';
-import { AgentContext, AgentFinding } from '../orchestrator';
-import { retrieveKnowledgeForIssue } from '../../knowledge-base/retrieval';
-import { formatContextForAgent } from '../orchestrator';
-import { mapConfidenceToLevel } from '../evidence-capture';
+import { OpenAI } from "openai";
+import type { AgentContext, AgentFinding } from "@/types";
+import { retrieveKnowledgeForIssue } from "../../knowledge-base/retrieval";
+import { formatContextForAgent } from "../orchestrator";
+import { mapConfidenceToLevel } from "../evidence-capture";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -19,27 +19,27 @@ const openai = new OpenAI({
  * Analyzes the design for accessibility issues based on WCAG guidelines
  */
 export async function accessibilitySpecialistAgent(context: AgentContext): Promise<AgentFinding[]> {
-  console.log('♿ Accessibility Specialist analyzing...');
+  console.log("♿ Accessibility Specialist analyzing...");
 
   try {
     // Retrieve relevant WCAG knowledge (secondary - for validation only)
     // Note: Knowledge base is a HELPER, not the primary driver. Persona-specific analysis comes first.
     const knowledge = await retrieveKnowledgeForIssue(
       `Validating persona-specific accessibility findings for ${context.persona.name} (${context.persona.role}). Use WCAG guidelines as validation framework.`,
-      'accessibility'
-    ).catch(() => ({ context: '', citations: [] })); // Don't fail if knowledge retrieval fails
+      "accessibility"
+    ).catch(() => ({ context: "", citations: [] })); // Don't fail if knowledge retrieval fails
 
     // Build persona-specific context
     const personaContext = `
 **PERSONA-SPECIFIC ANALYSIS (PRIMARY FOCUS):**
 You are analyzing this interface from the perspective of: ${context.persona.name} (${context.persona.role})
 
-${context.persona.description ? `Persona Description: ${context.persona.description}` : ''}
-${context.persona.accessibility && context.persona.accessibility.length > 0 ? `\nTheir Accessibility Needs: ${context.persona.accessibility.join(', ')}` : ''}
-${context.persona.constraints && context.persona.constraints.length > 0 ? `\nTheir Constraints: ${context.persona.constraints.join(', ')}` : ''}
-${context.persona.goals && context.persona.goals.length > 0 ? `\nTheir Goals: ${context.persona.goals.join(', ')}` : ''}
-${context.persona.frustrations && context.persona.frustrations.length > 0 ? `\nTheir Frustrations: ${context.persona.frustrations.join(', ')}` : ''}
-${context.persona.tags && context.persona.tags.length > 0 ? `\nPersona Tags: ${context.persona.tags.join(', ')}` : ''}
+${context.persona.description ? `Persona Description: ${context.persona.description}` : ""}
+${context.persona.accessibility && context.persona.accessibility.length > 0 ? `\nTheir Accessibility Needs: ${context.persona.accessibility.join(", ")}` : ""}
+${context.persona.constraints && context.persona.constraints.length > 0 ? `\nTheir Constraints: ${context.persona.constraints.join(", ")}` : ""}
+${context.persona.goals && context.persona.goals.length > 0 ? `\nTheir Goals: ${context.persona.goals.join(", ")}` : ""}
+${context.persona.frustrations && context.persona.frustrations.length > 0 ? `\nTheir Frustrations: ${context.persona.frustrations.join(", ")}` : ""}
+${context.persona.tags && context.persona.tags.length > 0 ? `\nPersona Tags: ${context.persona.tags.join(", ")}` : ""}
 
 **CRITICAL: Your findings MUST reflect accessibility issues that THIS specific persona would encounter.**
 - **ONLY report accessibility issues if:**
@@ -69,7 +69,7 @@ ${personaContext}
 **Your SECONDARY task:** Use WCAG guidelines to VALIDATE and EXPLAIN why these persona-specific accessibility barriers matter.
 
 **Knowledge Base (Reference Only):**
-${knowledge.context || 'No additional knowledge context available. Rely on persona-specific analysis.'}
+${knowledge.context || "No additional knowledge context available. Rely on persona-specific analysis."}
 
 **IMPORTANT:** The knowledge base above is for REFERENCE ONLY. Your primary analysis should come from the persona's perspective. Use the knowledge base to validate and explain, not to generate generic findings.
 
@@ -133,38 +133,40 @@ Output your findings as a JSON array of issues, each with:
 
     // Build user message with accessibility tree
     const a11yTree = context.semanticContext.accessibility_tree?.data;
-    const a11yContext = a11yTree 
+    const a11yContext = a11yTree
       ? `\nAccessibility Tree Analysis:\n${JSON.stringify(a11yTree, null, 2).substring(0, 2000)}...`
-      : '\nNote: Accessibility tree not available.';
+      : "\nNote: Accessibility tree not available.";
 
     const userMessage = `${formatContextForAgent(context)}${a11yContext}
 
 **ANALYZE FROM ${context.persona.name.toUpperCase()}'S PERSPECTIVE**
 
 **CRITICAL FILTER**: Only report accessibility issues if:
-1. ${context.persona.name} has explicit accessibility needs (${context.persona.accessibility?.join(', ') || 'NONE LISTED'})
-2. OR the issue directly blocks ${context.persona.name}'s goals (${context.persona.goals?.join(', ') || 'N/A'})
-3. OR the issue creates frustration for ${context.persona.name} based on their constraints (${context.persona.constraints?.join(', ') || 'N/A'})
+1. ${context.persona.name} has explicit accessibility needs (${context.persona.accessibility?.join(", ") || "NONE LISTED"})
+2. OR the issue directly blocks ${context.persona.name}'s goals (${context.persona.goals?.join(", ") || "N/A"})
+3. OR the issue creates frustration for ${context.persona.name} based on their constraints (${context.persona.constraints?.join(", ") || "N/A"})
 
 **If ${context.persona.name} has NO accessibility needs listed and the issue doesn't block their goals → SKIP IT**
 
 Analyze this interface for accessibility issues that ${context.persona.name} would specifically encounter:
-${context.persona.accessibility && context.persona.accessibility.length > 0 
-  ? `- Focus on: ${context.persona.accessibility.join(', ')}`
-  : `- This persona has NO explicit accessibility needs listed
-- Only report accessibility issues if they directly block their goals: ${context.persona.goals?.join(', ') || 'N/A'}
-- Skip generic accessibility checklists (ARIA labels, color contrast, etc.) unless they affect this persona's workflow`}
+${
+  context.persona.accessibility && context.persona.accessibility.length > 0
+    ? `- Focus on: ${context.persona.accessibility.join(", ")}`
+    : `- This persona has NO explicit accessibility needs listed
+- Only report accessibility issues if they directly block their goals: ${context.persona.goals?.join(", ") || "N/A"}
+- Skip generic accessibility checklists (ARIA labels, color contrast, etc.) unless they affect this persona's workflow`
+}
 
 Return a JSON array of findings. If no persona-specific accessibility issues are found, return an empty array.`;
 
     // Call OpenAI
     const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o',
+      model: process.env.OPENAI_MODEL || "gpt-4o",
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
       ],
-      response_format: { type: 'json_object' },
+      response_format: { type: "json_object" },
       temperature: 0.3,
     });
 
@@ -175,7 +177,7 @@ Return a JSON array of findings. If no persona-specific accessibility issues are
 
     const parsed = JSON.parse(content);
     let findings = [];
-    
+
     if (Array.isArray(parsed.findings)) {
       findings = parsed.findings;
     } else if (parsed.findings) {
@@ -187,30 +189,42 @@ Return a JSON array of findings. If no persona-specific accessibility issues are
     }
 
     // Add citations and category, ensure all required fields
-    return findings.map((finding: any): AgentFinding => {
+    // Raw finding from OpenAI API - structure is dynamic
+    type RawFinding = Record<string, unknown> & {
+      title?: string;
+      severity?: string;
+      confidence?: number;
+      description?: string;
+      suggestedFix?: string;
+      affectingTasks?: unknown;
+      elementSelector?: unknown;
+      elementPosition?: unknown;
+    };
+    return findings.map((finding: RawFinding): AgentFinding => {
       const confidence = finding.confidence || 50;
       return {
-        title: finding.title || 'Untitled Issue',
-        severity: (finding.severity || 'Med') as 'Blocker' | 'High' | 'Med' | 'Low',
+        title: finding.title || "Untitled Issue",
+        severity: (finding.severity || "Med") as "Blocker" | "High" | "Med" | "Low",
         confidence: confidence,
         confidence_level: mapConfidenceToLevel(confidence),
-        description: finding.description || '',
-        suggestedFix: finding.suggestedFix || '',
+        description: finding.description || "",
+        suggestedFix: finding.suggestedFix || "",
         affectingTasks: Array.isArray(finding.affectingTasks) ? finding.affectingTasks : [],
-        category: 'accessibility',
-        citations: (knowledge.citations || []).map(c => ({
+        category: "accessibility",
+        citations: (knowledge.citations || []).map((c) => ({
           chunk_id: c.chunkId,
           source: c.source,
           title: c.title,
           category: c.category,
         })),
-        elementSelector: finding.elementSelector,
-        elementPosition: finding.elementPosition,
+        elementSelector: finding.elementSelector as string | undefined,
+        elementPosition: finding.elementPosition as
+          | { x: number; y: number; width: number; height: number }
+          | undefined,
       };
     });
   } catch (error) {
-    console.error('Error in Accessibility Specialist:', error);
+    console.error("Error in Accessibility Specialist:", error);
     return [];
   }
 }
-

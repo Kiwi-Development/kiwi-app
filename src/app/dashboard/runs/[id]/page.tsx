@@ -11,7 +11,7 @@ import { PersonaProgressList } from "./components/persona-progress-list";
 import { LiveLog } from "./components/live-log";
 import { EventTimeline } from "./components/event-timeline";
 import { SideTabs } from "./components/side-tabs";
-import type { LiveRunState, RunEvent } from "../../../../lib/types";
+import type { LiveRunState, RunEvent, ScreenshotResponse, FindingCategory } from "@/types";
 import { useToast } from "../../../../hooks/use-toast";
 import { testStore, type Test } from "../../../../lib/test-store";
 import { personaStore } from "../../../../lib/persona-store";
@@ -451,8 +451,7 @@ export default function LiveRunPage() {
       const runStartedAt = Date.now();
 
       // Main simulation loop for this run
-      // Reduced from 3000ms to 1000ms for faster decisions
-      const DECISION_DELAY_MS = 1000;
+      const DECISION_DELAY_MS = 3000;
       let lastDecisionTime = Date.now();
 
       while (runCurrentProgress < 100) {
@@ -474,9 +473,8 @@ export default function LiveRunPage() {
             let retryCount = 0;
             let retrySuccess = false;
             while (retryCount < 2 && !retrySuccess) {
-              // Reduced retry delays: 800ms, 1600ms instead of 2s, 4s
-              await new Promise((r) => setTimeout(r, 800 * (retryCount + 1)));
-              const retryResult: any = await proxyScreenshot(sessionId);
+              await new Promise((r) => setTimeout(r, 2000 * (retryCount + 1)));
+              const retryResult: ScreenshotResponse = await proxyScreenshot(sessionId);
               if (retryResult.status === "ok" && retryResult.screenshot) {
                 // Success - continue with this screenshot
                 const b64 = retryResult.screenshot;
@@ -492,14 +490,12 @@ export default function LiveRunPage() {
               console.warn(
                 `[Run ${runIndex + 1}] Screenshot timeout after retries, skipping this frame`
               );
-              // Reduced from 2000ms to 500ms
-              await new Promise((r) => setTimeout(r, 500));
+              await new Promise((r) => setTimeout(r, 2000));
               continue;
             }
             // If retry succeeded, continue with normal flow (will process screenshot below)
           } else {
-            // Reduced from 1000ms to 300ms
-            await new Promise((r) => setTimeout(r, 300));
+            await new Promise((r) => setTimeout(r, 1000));
             continue;
           }
         }
@@ -507,8 +503,8 @@ export default function LiveRunPage() {
         const b64 = screenshotData.screenshot;
         runScreenshotIndex++;
 
-        // Extract context less frequently (every 10 screenshots instead of 5) for speed
-        if (runScreenshotIndex % 10 === 0) {
+        // Extract context periodically
+        if (runScreenshotIndex % 5 === 0) {
           try {
             const contextData = await extractContext(sessionId);
             if (contextData.status === "ok" && contextData.context) {
@@ -519,11 +515,10 @@ export default function LiveRunPage() {
           }
         }
 
-        // Check decision delay (reduced wait time)
+        // Check decision delay
         const now = Date.now();
         if (now - lastDecisionTime < DECISION_DELAY_MS) {
-          // Reduced from 1000ms to 200ms - just a brief pause
-          await new Promise((r) => setTimeout(r, 200));
+          await new Promise((r) => setTimeout(r, 1000));
           continue;
         }
 
@@ -601,8 +596,7 @@ export default function LiveRunPage() {
               });
 
               await proxyClick(sessionId, args.x, args.y);
-              // Reduced from 1500ms to 600ms for faster simulation
-              await new Promise((r) => setTimeout(r, 600));
+              await new Promise((r) => setTimeout(r, 1500));
               const screenshotAfter = await proxyScreenshot(sessionId);
               const newScreenshot = screenshotAfter.screenshot || screenshotBefore;
 
@@ -610,7 +604,7 @@ export default function LiveRunPage() {
                 x: clickX,
                 y: clickY,
                 timestamp: Date.now(),
-                screenshot: screenshotBefore,
+                screenshot: screenshotBefore || "",
               });
 
               if (runClickHistory.length > 10) {
@@ -796,7 +790,7 @@ export default function LiveRunPage() {
                       "other",
                     ].includes(normalized)
                   ) {
-                    return normalized as any;
+                    return normalized as FindingCategory;
                   }
 
                   // Map heuristic-based categories to valid values
@@ -1439,7 +1433,7 @@ export default function LiveRunPage() {
                       "other",
                     ].includes(normalized)
                   ) {
-                    return normalized as any;
+                    return normalized as FindingCategory;
                   }
 
                   // Map heuristic-based categories to valid values
@@ -1563,8 +1557,7 @@ export default function LiveRunPage() {
     }, 3000);
 
     // Main simulation loop
-    // Reduced from 3000ms to 1000ms for faster decisions
-    const DECISION_DELAY_MS = 1000;
+    const DECISION_DELAY_MS = 3000;
     let lastDecisionTime = Date.now();
     let screenshotIndex = 0; // Track screenshot index for evidence
 
@@ -1615,13 +1608,12 @@ export default function LiveRunPage() {
             let retryCount = 0;
             let retrySuccess = false;
             while (retryCount < 3 && !retrySuccess) {
-              // Reduced retry delays: 800ms, 1600ms instead of 2s, 4s
-              await new Promise((r) => setTimeout(r, 800 * (retryCount + 1)));
+              await new Promise((r) => setTimeout(r, 2000 * (retryCount + 1))); // 2s, 4s, 6s delays
               const retryResult = await proxyScreenshot(sessionId);
               if (retryResult.status === "ok" && retryResult.screenshot) {
                 // Success - use this screenshot
                 const b64 = retryResult.screenshot;
-                setCurrentScreenshot(b64);
+                setCurrentScreenshot(b64 || null);
                 screenshotIndex++;
                 retrySuccess = true;
                 // Continue with normal flow - break out of error handling
@@ -1633,8 +1625,7 @@ export default function LiveRunPage() {
             if (!retrySuccess) {
               console.error("Screenshot timeout after retries, continuing with last known state");
               // Continue with simulation - don't break, just skip this screenshot
-              // Reduced from 2000ms to 500ms
-              await new Promise((r) => setTimeout(r, 500));
+              await new Promise((r) => setTimeout(r, 2000));
               continue;
             }
             // If we got here, we have a valid screenshot from retry, continue normally
@@ -1646,7 +1637,7 @@ export default function LiveRunPage() {
         }
 
         const b64 = screenshotData.screenshot;
-        setCurrentScreenshot(b64);
+        setCurrentScreenshot(b64 || null);
         screenshotIndex++; // Increment screenshot index
 
         // Extract semantic context periodically (every 5th screenshot to avoid overhead)
@@ -1673,8 +1664,7 @@ export default function LiveRunPage() {
         // Check if enough time has passed for next decision
         const now = Date.now();
         if (now - lastDecisionTime < DECISION_DELAY_MS) {
-          // Reduced from 1000ms to 200ms - just a brief pause
-          await new Promise((r) => setTimeout(r, 200));
+          await new Promise((r) => setTimeout(r, 1000));
           continue;
         }
 
@@ -1779,8 +1769,7 @@ export default function LiveRunPage() {
               await proxyClick(sessionId, args.x, args.y);
 
               // Wait a bit for the page to update, then get new screenshot to check for changes
-              // Reduced from 1500ms to 600ms for faster simulation
-              await new Promise((r) => setTimeout(r, 600));
+              await new Promise((r) => setTimeout(r, 1500));
               const screenshotAfterClick = await proxyScreenshot(sessionId);
               const newScreenshot = screenshotAfterClick.screenshot || screenshotBeforeClick;
 
@@ -1789,7 +1778,7 @@ export default function LiveRunPage() {
                 x: clickX,
                 y: clickY,
                 timestamp: Date.now(),
-                screenshot: screenshotBeforeClick,
+                screenshot: screenshotBeforeClick || "",
               });
 
               // Keep only recent history

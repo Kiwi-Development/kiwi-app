@@ -34,7 +34,11 @@ export function AppSidebar({ onNavClick }: AppSidebarProps) {
   return (
     <div className="h-full w-full flex flex-col border-r border-border bg-sidebar/95 text-sidebar-foreground">
       <div className="flex h-20 items-center pl-4">
-        <Link href="/dashboard/tests" className="flex items-center justify-start" onClick={onNavClick}>
+        <Link
+          href="/dashboard/tests"
+          className="flex items-center justify-start"
+          onClick={onNavClick}
+        >
           <Image
             src="/kiwilogo.png"
             alt="Kiwi Logo"
@@ -61,11 +65,15 @@ export function AppSidebar({ onNavClick }: AppSidebarProps) {
                 "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
               )}
             >
-              <link.icon className={cn(
-                "h-5 w-5 flex-shrink-0 transition-colors",
-                isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-              )} />
-              <span className="truncate transition-transform duration-200 group-hover:translate-x-1">{link.label}</span>
+              <link.icon
+                className={cn(
+                  "h-5 w-5 flex-shrink-0 transition-colors",
+                  isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                )}
+              />
+              <span className="truncate transition-transform duration-200 group-hover:translate-x-1">
+                {link.label}
+              </span>
             </Link>
           );
         })}

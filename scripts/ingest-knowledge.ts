@@ -1,13 +1,13 @@
 /**
  * Knowledge Base Ingestion Script
- * 
+ *
  * Populates the knowledge_chunks table with UX laws, WCAG guidelines, and growth patterns.
- * 
+ *
  * Usage:
  *   npm run ingest-knowledge
  *   or
  *   npx tsx scripts/ingest-knowledge.ts
- * 
+ *
  * Requires:
  *   - NEXT_PUBLIC_SUPABASE_URL in .env.local
  *   - SUPABASE_SECRET_KEY in .env.local (or SUPABASE_SERVICE_ROLE_KEY for legacy)
@@ -64,9 +64,15 @@ async function main() {
   // Debug: Show what env vars are loaded (without showing values)
   const hasSecretKey = !!(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY);
   console.log("🔍 Environment check:");
-  console.log(`   NEXT_PUBLIC_SUPABASE_URL: ${process.env.NEXT_PUBLIC_SUPABASE_URL ? "✅ Set" : "❌ Missing"}`);
-  console.log(`   SUPABASE_SECRET_KEY: ${process.env.SUPABASE_SECRET_KEY ? "✅ Set" : "❌ Missing"}`);
-  console.log(`   SUPABASE_SERVICE_ROLE_KEY (legacy): ${process.env.SUPABASE_SERVICE_ROLE_KEY ? "✅ Set" : "❌ Missing"}`);
+  console.log(
+    `   NEXT_PUBLIC_SUPABASE_URL: ${process.env.NEXT_PUBLIC_SUPABASE_URL ? "✅ Set" : "❌ Missing"}`
+  );
+  console.log(
+    `   SUPABASE_SECRET_KEY: ${process.env.SUPABASE_SECRET_KEY ? "✅ Set" : "❌ Missing"}`
+  );
+  console.log(
+    `   SUPABASE_SERVICE_ROLE_KEY (legacy): ${process.env.SUPABASE_SERVICE_ROLE_KEY ? "✅ Set" : "❌ Missing"}`
+  );
   console.log(`   Secret key available: ${hasSecretKey ? "✅ Yes" : "❌ No"}`);
   console.log(`   OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? "✅ Set" : "❌ Missing"}`);
   console.log("");
@@ -78,16 +84,21 @@ async function main() {
     process.exit(1);
   }
 
-  const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseSecretKey =
+    process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseSecretKey) {
     console.error("❌ Error: SUPABASE_SECRET_KEY not set in environment");
     console.error("   Make sure it's in .env.local as: SUPABASE_SECRET_KEY=your_secret_key");
     console.error("   Get it from: Supabase Dashboard > Settings > API > Secret key");
     console.error("");
     console.error("   Note: This is different from the publishable key (sb_publishable_...)");
-    console.error("   The secret key (sb_secret_...) has elevated privileges and is needed for ingestion.");
+    console.error(
+      "   The secret key (sb_secret_...) has elevated privileges and is needed for ingestion."
+    );
     console.error("");
-    console.error("   Legacy support: You can also use SUPABASE_SERVICE_ROLE_KEY for backward compatibility.");
+    console.error(
+      "   Legacy support: You can also use SUPABASE_SERVICE_ROLE_KEY for backward compatibility."
+    );
     process.exit(1);
   }
 
@@ -110,7 +121,10 @@ async function main() {
     await ingestKnowledgeFile(path.join(knowledgeDir, "growth-patterns.md"), "growth_patterns");
 
     console.log("\n📖 Ingesting Nielsen's 10 Usability Heuristics...");
-    await ingestKnowledgeFile(path.join(knowledgeDir, "nielsen-heuristics.md"), "nielsen_heuristics");
+    await ingestKnowledgeFile(
+      path.join(knowledgeDir, "nielsen-heuristics.md"),
+      "nielsen_heuristics"
+    );
 
     console.log("\n📖 Ingesting Kiwi UI Critique Rubric...");
     await ingestKnowledgeFile(path.join(knowledgeDir, "kiwi-ui-rubric.md"), "kiwi_rubric");
@@ -127,4 +141,3 @@ main().catch((error) => {
   console.error("Fatal error:", error);
   process.exit(1);
 });
-

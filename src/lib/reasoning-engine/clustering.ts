@@ -1,10 +1,10 @@
 /**
  * Finding Clustering and Deduplication
- * 
+ *
  * Groups similar findings across personas/tasks to avoid duplicates
  */
 
-import { AgentFinding, EvidenceSnippet } from './orchestrator';
+import { AgentFinding, EvidenceSnippet } from "./orchestrator";
 // Note: Embeddings removed - using simple string similarity for client-side clustering
 // OpenAI API key is not available on client side (and shouldn't be exposed via NEXT_PUBLIC_)
 
@@ -18,7 +18,7 @@ export interface ClusteredFinding extends AgentFinding {
 
 /**
  * Calculate similarity between two findings
- * 
+ *
  * Note: On the client side, we use simple string similarity since OpenAI API key
  * is not available (and should not be exposed via NEXT_PUBLIC_ prefix for security).
  * For better clustering, this could be moved to a server-side API route.
@@ -29,9 +29,11 @@ async function calculateFindingSimilarity(
 ): Promise<number> {
   // Always use simple string similarity on client side (no API key available)
   // This is safe and doesn't require server-side API calls
-  const text1 = `${finding1.title} ${finding1.description} ${finding1.suggestedFix || ''}`.toLowerCase();
-  const text2 = `${finding2.title} ${finding2.description} ${finding2.suggestedFix || ''}`.toLowerCase();
-  
+  const text1 =
+    `${finding1.title} ${finding1.description} ${finding1.suggestedFix || ""}`.toLowerCase();
+  const text2 =
+    `${finding2.title} ${finding2.description} ${finding2.suggestedFix || ""}`.toLowerCase();
+
   return simpleStringSimilarity(text1, text2);
 }
 
@@ -40,11 +42,11 @@ async function calculateFindingSimilarity(
  */
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
   if (vecA.length !== vecB.length) return 0;
-  
+
   const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
   const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
   const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
-  
+
   if (magnitudeA === 0 || magnitudeB === 0) return 0;
   return dotProduct / (magnitudeA * magnitudeB);
 }
@@ -55,10 +57,10 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
 function simpleStringSimilarity(str1: string, str2: string): number {
   const words1 = new Set(str1.toLowerCase().split(/\s+/));
   const words2 = new Set(str2.toLowerCase().split(/\s+/));
-  
-  const intersection = new Set([...words1].filter(x => words2.has(x)));
+
+  const intersection = new Set([...words1].filter((x) => words2.has(x)));
   const union = new Set([...words1, ...words2]);
-  
+
   return union.size > 0 ? intersection.size / union.size : 0;
 }
 
@@ -99,7 +101,7 @@ export async function clusterFindings(
         ) <= 1
       ) {
         const similarity = await calculateFindingSimilarity(currentFinding, findings[j]);
-        
+
         if (similarity >= similarityThreshold) {
           cluster.push(j);
           processed.add(j);
@@ -116,12 +118,13 @@ export async function clusterFindings(
         frequency: 1,
         triggered_by_tasks: currentFinding.affectingTasks,
         triggered_by_personas: [personaName],
-        evidence_snippets: currentFinding.evidence_snippets || evidenceSnippets.get(i.toString()) || [],
+        evidence_snippets:
+          currentFinding.evidence_snippets || evidenceSnippets.get(i.toString()) || [],
       });
     } else {
       // Multiple similar findings - merge into one canonical finding
-      const clusterFindings = cluster.map(idx => findings[idx]);
-      
+      const clusterFindings = cluster.map((idx) => findings[idx]);
+
       // Use the finding with highest confidence as the canonical one
       const canonical = clusterFindings.reduce((best, current) =>
         current.confidence > best.confidence ? current : best
@@ -135,12 +138,16 @@ export async function clusterFindings(
         const findingEvidence = finding.evidence_snippets || [];
         const mapEvidence = evidenceSnippets.get(idx.toString()) || [];
         // Combine evidence, avoiding duplicates
-        [...findingEvidence, ...mapEvidence].forEach(ev => {
-          if (!allEvidence.some(existing => 
-            existing.persona_name === ev.persona_name && 
-            existing.task_context === ev.task_context &&
-            JSON.stringify(existing.what_happened_steps) === JSON.stringify(ev.what_happened_steps)
-          )) {
+        [...findingEvidence, ...mapEvidence].forEach((ev) => {
+          if (
+            !allEvidence.some(
+              (existing) =>
+                existing.persona_name === ev.persona_name &&
+                existing.task_context === ev.task_context &&
+                JSON.stringify(existing.what_happened_steps) ===
+                  JSON.stringify(ev.what_happened_steps)
+            )
+          ) {
             allEvidence.push(ev);
           }
         });
@@ -148,8 +155,8 @@ export async function clusterFindings(
 
       // Merge triggered tasks and personas
       const allTasks = new Set<string>();
-      clusterFindings.forEach(f => {
-        f.affectingTasks.forEach(t => allTasks.add(t));
+      clusterFindings.forEach((f) => {
+        f.affectingTasks.forEach((t) => allTasks.add(t));
       });
 
       clustered.push({
@@ -168,13 +175,12 @@ export async function clusterFindings(
 /**
  * Convert severity to number for comparison
  */
-function severityToNumber(severity: 'Blocker' | 'High' | 'Med' | 'Low'): number {
+function severityToNumber(severity: "Blocker" | "High" | "Med" | "Low"): number {
   const map: Record<string, number> = {
-    'Blocker': 4,
-    'High': 3,
-    'Med': 2,
-    'Low': 1,
+    Blocker: 4,
+    High: 3,
+    Med: 2,
+    Low: 1,
   };
   return map[severity] || 2;
 }
-

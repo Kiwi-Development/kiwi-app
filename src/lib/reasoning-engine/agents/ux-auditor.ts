@@ -1,14 +1,14 @@
 /**
  * UX Auditor Agent
- * 
+ *
  * Specializes in identifying UX issues based on design principles and UX laws
  */
 
-import { OpenAI } from 'openai';
-import { AgentContext, AgentFinding } from '../orchestrator';
-import { retrieveKnowledgeForIssue } from '../../knowledge-base/retrieval';
-import { formatContextForAgent } from '../orchestrator';
-import { mapConfidenceToLevel } from '../evidence-capture';
+import { OpenAI } from "openai";
+import type { AgentContext, AgentFinding } from "@/types";
+import { retrieveKnowledgeForIssue } from "../../knowledge-base/retrieval";
+import { formatContextForAgent } from "../orchestrator";
+import { mapConfidenceToLevel } from "../evidence-capture";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -19,27 +19,27 @@ const openai = new OpenAI({
  * Analyzes the design for UX issues based on design principles
  */
 export async function uxAuditorAgent(context: AgentContext): Promise<AgentFinding[]> {
-  console.log('🔍 UX Auditor analyzing...');
+  console.log("🔍 UX Auditor analyzing...");
 
   try {
     // Retrieve relevant UX knowledge (secondary - for validation only)
     // Note: Knowledge base is a HELPER, not the primary driver. Persona-specific analysis comes first.
     const knowledge = await retrieveKnowledgeForIssue(
       `Validating persona-specific UX findings for ${context.persona.name} (${context.persona.role}). Use Nielsen's Heuristics and UX Laws as validation framework.`,
-      'ux'
-    ).catch(() => ({ context: '', citations: [] })); // Don't fail if knowledge retrieval fails
+      "ux"
+    ).catch(() => ({ context: "", citations: [] })); // Don't fail if knowledge retrieval fails
 
     // Build persona-specific context
     const personaContext = `
 **PERSONA-SPECIFIC ANALYSIS (PRIMARY FOCUS):**
 You are analyzing this interface from the perspective of: ${context.persona.name} (${context.persona.role})
 
-${context.persona.description ? `Persona Description: ${context.persona.description}` : ''}
-${context.persona.goals && context.persona.goals.length > 0 ? `\nTheir Goals: ${context.persona.goals.join(', ')}` : ''}
-${context.persona.behaviors && context.persona.behaviors.length > 0 ? `\nTheir Behaviors: ${context.persona.behaviors.join(', ')}` : ''}
-${context.persona.frustrations && context.persona.frustrations.length > 0 ? `\nTheir Frustrations: ${context.persona.frustrations.join(', ')}` : ''}
-${context.persona.constraints && context.persona.constraints.length > 0 ? `\nTheir Constraints: ${context.persona.constraints.join(', ')}` : ''}
-${context.persona.tags && context.persona.tags.length > 0 ? `\nPersona Tags: ${context.persona.tags.join(', ')}` : ''}
+${context.persona.description ? `Persona Description: ${context.persona.description}` : ""}
+${context.persona.goals && context.persona.goals.length > 0 ? `\nTheir Goals: ${context.persona.goals.join(", ")}` : ""}
+${context.persona.behaviors && context.persona.behaviors.length > 0 ? `\nTheir Behaviors: ${context.persona.behaviors.join(", ")}` : ""}
+${context.persona.frustrations && context.persona.frustrations.length > 0 ? `\nTheir Frustrations: ${context.persona.frustrations.join(", ")}` : ""}
+${context.persona.constraints && context.persona.constraints.length > 0 ? `\nTheir Constraints: ${context.persona.constraints.join(", ")}` : ""}
+${context.persona.tags && context.persona.tags.length > 0 ? `\nPersona Tags: ${context.persona.tags.join(", ")}` : ""}
 
 **CRITICAL: Your findings MUST reflect what THIS specific persona would notice, struggle with, or find valuable.**
 - A Marketing Manager would notice different things than a Senior Designer or a College Student
@@ -66,7 +66,7 @@ ${personaContext}
 **Your SECONDARY task:** Use established design principles (Nielsen's Heuristics, UX Laws) to VALIDATE and EXPLAIN why these persona-specific issues matter.
 
 **Knowledge Base (Reference Only):**
-${knowledge.context || 'No additional knowledge context available. Rely on persona-specific analysis.'}
+${knowledge.context || "No additional knowledge context available. Rely on persona-specific analysis."}
 
 **IMPORTANT:** The knowledge base above is for REFERENCE ONLY. Your primary analysis should come from the persona's perspective. Use the knowledge base to validate and explain, not to generate generic findings.
 
@@ -151,10 +151,10 @@ Analyze this interface for UX issues that ${context.persona.name} (${context.per
 
 **Step 1: Persona-Specific Analysis**
 - What would ${context.persona.name} notice based on their role (${context.persona.role})?
-- How do their goals (${context.persona.goals?.join(', ') || 'N/A'}) affect what they look for?
-- How do their behaviors (${context.persona.behaviors?.join(', ') || 'N/A'}) affect how they interact?
-- What frustrations (${context.persona.frustrations?.join(', ') || 'N/A'}) would they encounter?
-- What constraints (${context.persona.constraints?.join(', ') || 'N/A'}) limit their experience?
+- How do their goals (${context.persona.goals?.join(", ") || "N/A"}) affect what they look for?
+- How do their behaviors (${context.persona.behaviors?.join(", ") || "N/A"}) affect how they interact?
+- What frustrations (${context.persona.frustrations?.join(", ") || "N/A"}) would they encounter?
+- What constraints (${context.persona.constraints?.join(", ") || "N/A"}) limit their experience?
 
 **Step 2: Validate with Design Principles**
 Use Nielsen's 10 Heuristics and UX laws to validate and explain why these persona-specific issues matter:
@@ -183,12 +183,12 @@ Return a JSON array of findings with proper severity ratings.`;
 
     // Call OpenAI
     const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o',
+      model: process.env.OPENAI_MODEL || "gpt-4o",
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
       ],
-      response_format: { type: 'json_object' },
+      response_format: { type: "json_object" },
       temperature: 0.3,
     });
 
@@ -199,7 +199,7 @@ Return a JSON array of findings with proper severity ratings.`;
 
     const parsed = JSON.parse(content);
     let findings = [];
-    
+
     if (Array.isArray(parsed.findings)) {
       findings = parsed.findings;
     } else if (parsed.findings) {
@@ -211,33 +211,54 @@ Return a JSON array of findings with proper severity ratings.`;
     }
 
     // Add citations and category, ensure all required fields
-    return findings.map((finding: any): AgentFinding => {
+    // Raw finding from OpenAI API - structure is dynamic
+    type RawFinding = Record<string, unknown> & {
+      title?: string;
+      severity?: string;
+      confidence?: number;
+      description?: string;
+      suggestedFix?: string;
+      affectingTasks?: unknown;
+      category?: string;
+      elementSelector?: unknown;
+      elementPosition?: unknown;
+    };
+    return findings.map((finding: RawFinding): AgentFinding => {
       const confidence = finding.confidence || 50;
-      const confidenceLevel = confidence >= 70 ? 'High' : confidence >= 40 ? 'Med' : 'Low';
-      const category = finding.category || 'other';
-      
+      const confidenceLevel = confidence >= 70 ? "High" : confidence >= 40 ? "Med" : "Low";
+      const category = finding.category || "other";
+
       return {
-        title: finding.title || 'Untitled Issue',
-        severity: (finding.severity || 'Med') as 'Blocker' | 'High' | 'Med' | 'Low',
+        title: finding.title || "Untitled Issue",
+        severity: (finding.severity || "Med") as "Blocker" | "High" | "Med" | "Low",
         confidence: confidence,
         confidence_level: mapConfidenceToLevel(confidence),
-        description: finding.description || '',
-        suggestedFix: finding.suggestedFix || '',
+        description: finding.description || "",
+        suggestedFix: finding.suggestedFix || "",
         affectingTasks: Array.isArray(finding.affectingTasks) ? finding.affectingTasks : [],
-        category: category as 'navigation' | 'copy' | 'affordance_feedback' | 'forms' | 'hierarchy' | 'accessibility' | 'conversion' | 'other',
-        citations: (knowledge.citations || []).map(c => ({
+        category: category as
+          | "navigation"
+          | "copy"
+          | "affordance_feedback"
+          | "forms"
+          | "hierarchy"
+          | "accessibility"
+          | "conversion"
+          | "other",
+        citations: (knowledge.citations || []).map((c) => ({
           chunk_id: c.chunkId,
           source: c.source,
           title: c.title,
           category: c.category,
         })),
-        elementSelector: finding.elementSelector,
-        elementPosition: finding.elementPosition,
+        elementSelector: finding.elementSelector as string | undefined,
+        elementPosition: finding.elementPosition as
+          | { x: number; y: number; width: number; height: number }
+          | undefined,
       };
     });
   } catch (error) {
-    console.error('Error in UX Auditor:', error);
+    console.error("Error in UX Auditor:", error);
     return [];
   }
 }
-

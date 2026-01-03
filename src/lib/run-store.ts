@@ -1,4 +1,4 @@
-import { LiveRunState } from "./types";
+import type { LiveRunState, SemanticContext } from "@/types";
 import { supabase } from "./supabase";
 
 type ActiveRun = {
@@ -165,7 +165,7 @@ class RunStore {
 
       // Extract semantic context if available
       const semanticContext =
-        (state as LiveRunState & { semanticContext?: any }).semanticContext || null;
+        (state as LiveRunState & { semanticContext?: SemanticContext }).semanticContext || null;
 
       const insertData = {
         test_id: testId,

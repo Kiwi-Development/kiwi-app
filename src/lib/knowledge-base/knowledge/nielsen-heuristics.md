@@ -1,14 +1,17 @@
 # Jakob Nielsen's 10 Usability Heuristics
 
 ## Overview
+
 **Source:** Nielsen Norman Group (1994)
 **Category:** UX Principles
 **Description:** Ten general principles for interaction design, originally developed by Jakob Nielsen and Rolf Molich. These heuristics are broad rules of thumb for usability, not specific usability guidelines.
 
 ## 1. Visibility of System Status
+
 **Description:** The system should always keep users informed about what is happening through feedback within reasonable time.
 
 **Application:**
+
 - Show loading indicators for operations that take time
 - Display status messages for user actions
 - Provide progress indicators for multi-step processes
@@ -22,9 +25,11 @@
 **Reference:** [Nielsen Norman Group](https://www.nngroup.com/articles/ten-usability-heuristics/)
 
 ## 2. Match Between System and the Real World
+
 **Description:** Use language, concepts, and metaphors that are familiar to users and consistent with real-world experiences.
 
 **Application:**
+
 - Use terminology that matches users' domain language
 - Follow real-world conventions (e.g., shopping cart icon for e-commerce)
 - Organize information in a natural and logical order
@@ -38,9 +43,11 @@
 **Reference:** [Nielsen Norman Group](https://www.nngroup.com/articles/ten-usability-heuristics/)
 
 ## 3. User Control and Freedom
+
 **Description:** Users often make mistakes — provide clearly marked ways to undo/exit unwanted actions.
 
 **Application:**
+
 - Provide "Undo" and "Redo" functionality
 - Include "Cancel" or "Back" buttons
 - Allow users to exit flows easily
@@ -54,9 +61,11 @@
 **Reference:** [Nielsen Norman Group](https://www.nngroup.com/articles/ten-usability-heuristics/)
 
 ## 4. Consistency and Standards
+
 **Description:** Follow platform conventions and keep internal design elements consistent so users don't have to wonder if different words or actions mean the same thing.
 
 **Application:**
+
 - Use consistent terminology throughout the interface
 - Follow platform design guidelines (iOS, Material Design, etc.)
 - Maintain consistent visual language (colors, typography, spacing)
@@ -70,9 +79,11 @@
 **Reference:** [Nielsen Norman Group](https://www.nngroup.com/articles/ten-usability-heuristics/)
 
 ## 5. Error Prevention
+
 **Description:** Design systems to prevent problems from occurring, not just respond with error messages.
 
 **Application:**
+
 - Use constraints to prevent invalid input (e.g., date pickers instead of free text)
 - Provide helpful defaults
 - Confirm destructive actions
@@ -86,9 +97,11 @@
 **Reference:** [The Decision Lab](https://thedecisionlab.com/reference-guide/design/nielsens-heuristics)
 
 ## 6. Recognition Rather Than Recall
+
 **Description:** Minimize users' memory load by making objects, actions, and options visible (don't make users remember information across screens).
 
 **Application:**
+
 - Show relevant information in context
 - Use icons with labels (not icons alone)
 - Display previously entered information
@@ -103,9 +116,11 @@
 **Reference:** [The Decision Lab](https://thedecisionlab.com/reference-guide/design/nielsens-heuristics)
 
 ## 7. Flexibility and Efficiency of Use
+
 **Description:** Accelerators (shortcuts) and customization help both novice and expert users navigate the interface more efficiently.
 
 **Application:**
+
 - Provide keyboard shortcuts for power users
 - Allow customization of workflows
 - Support both simple and advanced modes
@@ -120,9 +135,11 @@
 **Reference:** [The Decision Lab](https://thedecisionlab.com/reference-guide/design/nielsens-heuristics)
 
 ## 8. Aesthetic and Minimalist Design
+
 **Description:** Interfaces should not contain irrelevant or rarely needed information; simplicity helps users focus.
 
 **Application:**
+
 - Remove unnecessary elements
 - Prioritize content and functionality
 - Use whitespace effectively
@@ -137,9 +154,11 @@
 **Reference:** [Nielsen Norman Group](https://www.nngroup.com/articles/ten-usability-heuristics/)
 
 ## 9. Help Users Recognize, Diagnose, and Recover from Errors
+
 **Description:** Error messages should use plain language, precisely indicate the problem, and suggest solutions.
 
 **Application:**
+
 - Write error messages in plain language (no technical jargon)
 - Clearly indicate what went wrong
 - Explain why the error occurred
@@ -154,9 +173,11 @@
 **Reference:** [The Decision Lab](https://thedecisionlab.com/reference-guide/design/nielsens-heuristics)
 
 ## 10. Help and Documentation
+
 **Description:** Even though it's better if the system can be used without documentation, help should be provided when needed and easy to search and follow.
 
 **Application:**
+
 - Provide contextual help where needed
 - Make help easily searchable
 - Use step-by-step instructions
@@ -169,4 +190,3 @@
 **Example Fix:** Add a "?" icon next to the feature that opens a tooltip explaining it, with a link to detailed documentation.
 
 **Reference:** [Nielsen Norman Group](https://www.nngroup.com/articles/ten-usability-heuristics/)
-

@@ -42,7 +42,7 @@ async def extract_dom_tree(page: Page) -> Dict[str, Any]:
                 };
             }
             
-            function buildTree(element, maxDepth = 3, currentDepth = 0) {
+            function buildTree(element, maxDepth = 5, currentDepth = 0) {
                 if (currentDepth >= maxDepth) return null;
                 
                 const info = extractElementInfo(element);
@@ -136,7 +136,7 @@ async def extract_accessibility_tree(page: Page) -> Dict[str, Any]:
                 };
             }
             
-            function buildA11yTree(element, maxDepth = 3, currentDepth = 0) {
+            function buildA11yTree(element, maxDepth = 5, currentDepth = 0) {
                 if (currentDepth >= maxDepth) return null;
                 
                 const info = extractA11yInfo(element);

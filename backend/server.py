@@ -64,41 +64,26 @@ def run_async(coro):
 session_timers = {}
 
 # Maximum number of concurrent sessions to prevent memory issues
-# Reduced to 2 to prevent memory limit exceeded errors
-MAX_CONCURRENT_SESSIONS = 2
+# Set to 4 for Standard tier (1GB+ RAM) - can handle more concurrent users
+MAX_CONCURRENT_SESSIONS = 4
 
 def cleanup_old_sessions():
     """Closes the oldest sessions if we exceed MAX_CONCURRENT_SESSIONS."""
     global session_timers
     import browser_controller
     
-    # More aggressive cleanup: close sessions if we're at or above the limit
-    while len(session_timers) >= MAX_CONCURRENT_SESSIONS:
+    if len(session_timers) > MAX_CONCURRENT_SESSIONS:
         # Get oldest session (first in dict)
         oldest_session = next(iter(session_timers.keys()))
         print(f"Too many sessions ({len(session_timers)}), closing oldest: {oldest_session}")
         if oldest_session in session_timers:
             session_timers[oldest_session].cancel()
-        try:
-            run_async(browser_controller.close_session(oldest_session))
-        except Exception as e:
-            logger.warning(f"Error closing session {oldest_session}: {e}")
+        run_async(browser_controller.close_session(oldest_session))
         if oldest_session in session_timers:
             del session_timers[oldest_session]
 
-def reset_session_timeout(session_id):
-    """Resets the timeout for an active session (called on each activity)."""
-    global session_timers
-    
-    # Only reset if session exists and is being tracked
-    if session_id in session_timers:
-        # Cancel existing timer
-        session_timers[session_id].cancel()
-        # Schedule new timeout
-        schedule_session_timeout(session_id)
-
 def schedule_session_timeout(session_id):
-    """Schedules the browser session to close after inactivity."""
+    """Schedules the browser session to close after 5 minutes."""
     global session_timers
     
     # Clean up old sessions if we have too many
@@ -109,17 +94,16 @@ def schedule_session_timeout(session_id):
         session_timers[session_id].cancel()
         
     def timeout_handler():
-        print(f"Session {session_id} timed out due to inactivity. Closing browser tab...")
+        print(f"Session {session_id} timed out. Closing browser tab...")
         run_async(browser_controller.close_session(session_id))
         if session_id in session_timers:
             del session_timers[session_id]
         
-    # 5 minutes = 300 seconds of inactivity before timeout
-    # This allows longer runs while still cleaning up inactive sessions
+    # 5 minutes = 300 seconds (Standard tier has enough memory for longer sessions)
     timer = threading.Timer(300, timeout_handler)
     session_timers[session_id] = timer
     timer.start()
-    print(f"Scheduled session timeout for {session_id} in 5 minutes (resets on activity).")
+    print(f"Scheduled session timeout for {session_id} in 3 minutes.")
 
 # Pydantic models for request validation
 class StartSessionRequest(BaseModel):
@@ -253,9 +237,6 @@ async def click(request: ClickRequest):
                 }
             )
         
-        # Reset timeout since session is active
-        reset_session_timeout(session_id)
-        
         old_url = run_async(browser_controller.get_current_url(session_id))
         run_async(browser_controller.click_at(session_id, x, y))
         new_url = run_async(browser_controller.get_current_url(session_id))
@@ -288,9 +269,6 @@ async def screenshot(request: ScreenshotRequest):
                     "code": "SESSION_NOT_FOUND"
                 }
             )
-        
-        # Reset timeout since session is active
-        reset_session_timeout(session_id)
         
         try:
             img_bytes = run_async(browser_controller.take_screenshot(session_id))
@@ -353,9 +331,6 @@ async def extract_context(request: ExtractContextRequest):
     session_id = request.sessionId
     
     try:
-        # Reset timeout since session is active
-        reset_session_timeout(session_id)
-        
         context = run_async(browser_controller.extract_context(session_id))
         return {
             "status": "ok",

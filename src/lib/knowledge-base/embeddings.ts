@@ -1,10 +1,10 @@
 /**
  * Embeddings Generation
- * 
+ *
  * Generates embeddings using OpenAI's text-embedding-ada-002 model
  */
 
-import { OpenAI } from 'openai';
+import { OpenAI } from "openai";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -16,7 +16,7 @@ const openai = new OpenAI({
 export async function generateEmbedding(text: string): Promise<number[]> {
   try {
     const response = await openai.embeddings.create({
-      model: 'text-embedding-ada-002',
+      model: "text-embedding-ada-002",
       input: text,
     });
 
@@ -38,14 +38,14 @@ export async function generateEmbeddingsBatch(
 
   for (let i = 0; i < texts.length; i += batchSize) {
     const batch = texts.slice(i, i + batchSize);
-    
+
     try {
       const response = await openai.embeddings.create({
-        model: 'text-embedding-ada-002',
+        model: "text-embedding-ada-002",
         input: batch,
       });
 
-      embeddings.push(...response.data.map(item => item.embedding));
+      embeddings.push(...response.data.map((item) => item.embedding));
     } catch (error) {
       // Error generating embeddings for batch
       // Return empty embeddings for failed batch
@@ -55,4 +55,3 @@ export async function generateEmbeddingsBatch(
 
   return embeddings;
 }
-

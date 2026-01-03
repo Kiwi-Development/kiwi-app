@@ -1,42 +1,45 @@
 /**
  * Ticket Generator
- * 
+ *
  * Generates issue tickets in GitHub/JIRA format
  */
 
-import { AgentFinding } from '../reasoning-engine/orchestrator';
+import { AgentFinding } from "../reasoning-engine/orchestrator";
 
 export interface Ticket {
-  format: 'github' | 'jira';
+  format: "github" | "jira";
   title: string;
   body: string;
   labels: string[];
-  priority: 'high' | 'medium' | 'low';
+  priority: "high" | "medium" | "low";
 }
 
 /**
  * Generate ticket for a finding
  */
-export function generateTicket(finding: AgentFinding, format: 'github' | 'jira' = 'github'): Ticket {
-  const priority = finding.severity === 'High' ? 'high' : finding.severity === 'Med' ? 'medium' : 'low';
-  
+export function generateTicket(
+  finding: AgentFinding,
+  format: "github" | "jira" = "github"
+): Ticket {
+  const priority =
+    finding.severity === "High" ? "high" : finding.severity === "Med" ? "medium" : "low";
+
   const labels = [
     finding.category,
     `severity-${finding.severity.toLowerCase()}`,
-    'design-intelligence',
+    "design-intelligence",
   ];
 
-  if (finding.category === 'accessibility') {
-    labels.push('a11y');
+  if (finding.category === "accessibility") {
+    labels.push("a11y");
     const wcag = extractWCAGGuideline(finding);
     if (wcag) {
       labels.push(`wcag-${wcag}`);
     }
   }
 
-  const body = format === 'github' 
-    ? generateGitHubIssueBody(finding)
-    : generateJiraIssueBody(finding);
+  const body =
+    format === "github" ? generateGitHubIssueBody(finding) : generateJiraIssueBody(finding);
 
   return {
     format,
@@ -59,7 +62,7 @@ function generateGitHubIssueBody(finding: AgentFinding): string {
 
   if (finding.affectingTasks.length > 0) {
     body += `## Affected Tasks\n\n`;
-    finding.affectingTasks.forEach(task => {
+    finding.affectingTasks.forEach((task) => {
       body += `- ${task}\n`;
     });
     body += `\n`;
@@ -97,7 +100,7 @@ function generateJiraIssueBody(finding: AgentFinding): string {
 
   if (finding.affectingTasks.length > 0) {
     body += `h2. Affected Tasks\n\n`;
-    finding.affectingTasks.forEach(task => {
+    finding.affectingTasks.forEach((task) => {
       body += `* ${task}\n`;
     });
     body += `\n`;
@@ -132,7 +135,7 @@ function extractWCAGGuideline(finding: AgentFinding): string | null {
     return wcagMatch[1];
   }
 
-  const citation = finding.citations.find(c => c.category === 'wcag');
+  const citation = finding.citations.find((c) => c.category === "wcag");
   if (citation) {
     const match = citation.title.match(/([\d.]+)/);
     if (match) {
@@ -142,4 +145,3 @@ function extractWCAGGuideline(finding: AgentFinding): string | null {
 
   return null;
 }
-

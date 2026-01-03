@@ -1,25 +1,21 @@
 /**
  * Vector Store Client for Knowledge Base
- * 
+ *
  * Handles vector similarity search using Supabase pgvector
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export interface KnowledgeChunk {
-  id: string;
-  content: string;
-  category: 'ux_laws' | 'wcag' | 'growth_patterns' | 'design_principles' | 'nielsen_heuristics' | 'kiwi_rubric';
-  source: string;
-  title: string;
-  metadata: Record<string, any>;
-  similarity?: number;
-}
+import type { KnowledgeChunk } from "@/types";
+import type { KnowledgeChunkRow } from "@/types/database";
+
+// Re-export for backwards compatibility
+export type { KnowledgeChunk };
 
 /**
  * Search knowledge chunks by embedding similarity
@@ -27,7 +23,7 @@ export interface KnowledgeChunk {
 export async function searchKnowledgeChunks(
   queryEmbedding: number[],
   options: {
-    category?: KnowledgeChunk['category'];
+    category?: KnowledgeChunk["category"];
     threshold?: number;
     limit?: number;
   } = {}
@@ -37,9 +33,9 @@ export async function searchKnowledgeChunks(
   try {
     // Use the database function for vector search
     // PostgreSQL vector type expects array format
-    const embeddingArray = `[${queryEmbedding.join(',')}]`;
+    const embeddingArray = `[${queryEmbedding.join(",")}]`;
 
-    let query = supabase.rpc('search_knowledge_chunks', {
+    const query = supabase.rpc("search_knowledge_chunks", {
       query_embedding: embeddingArray,
       match_category: category || null,
       match_threshold: threshold,
@@ -53,17 +49,19 @@ export async function searchKnowledgeChunks(
       throw error;
     }
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      content: row.content,
-      category: row.category,
-      source: row.source,
-      title: row.title,
-      metadata: row.metadata || {},
-      similarity: row.similarity,
-    }));
+    return (data || []).map(
+      (row: KnowledgeChunkRow): KnowledgeChunk => ({
+        id: row.id,
+        content: row.content,
+        category: row.category as KnowledgeChunk["category"],
+        source: row.source,
+        title: row.title,
+        metadata: (row.metadata || {}) as KnowledgeChunk["metadata"],
+        similarity: row.similarity,
+      })
+    );
   } catch (error) {
-    console.error('Error in searchKnowledgeChunks:', error);
+    console.error("Error in searchKnowledgeChunks:", error);
     return [];
   }
 }
@@ -74,13 +72,13 @@ export async function searchKnowledgeChunks(
 export async function getKnowledgeChunkById(id: string): Promise<KnowledgeChunk | null> {
   try {
     const { data, error } = await supabase
-      .from('knowledge_chunks')
-      .select('*')
-      .eq('id', id)
+      .from("knowledge_chunks")
+      .select("*")
+      .eq("id", id)
       .single();
 
     if (error) {
-      console.error('Error fetching knowledge chunk:', error);
+      console.error("Error fetching knowledge chunk:", error);
       return null;
     }
 
@@ -93,8 +91,7 @@ export async function getKnowledgeChunkById(id: string): Promise<KnowledgeChunk 
       metadata: data.metadata || {},
     };
   } catch (error) {
-    console.error('Error in getKnowledgeChunkById:', error);
+    console.error("Error in getKnowledgeChunkById:", error);
     return null;
   }
 }
-

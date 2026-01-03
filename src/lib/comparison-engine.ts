@@ -1,42 +1,16 @@
 import { supabase } from "./supabase";
+import type {
+  Finding,
+  EvidenceSnippet,
+  Regression,
+  ComparisonResult,
+  ConfusionHotspot,
+  FindingCounts,
+} from "@/types";
+import type { FeedbackEntryRow } from "@/types/database";
 
-export interface Finding {
-  id: string;
-  title: string;
-  severity: "Blocker" | "High" | "Med" | "Low";
-  confidence: number;
-  description: string;
-  suggestedFix: string;
-  affectingTasks: string[];
-  frequency?: number;
-  category?: string;
-  evidence_snippets?: any[];
-}
-
-export interface Regression {
-  finding: Finding;
-  severityChange: string;
-  frequencyChange?: string;
-}
-
-export interface ConfusionHotspot {
-  area: string;
-  issueCount: number;
-  elements?: string[];
-}
-
-export interface ComparisonResult {
-  runA: { id: string };
-  runB: { id: string };
-  findingCounts: {
-    a: { blocker: number; high: number; med: number; low: number };
-    b: { blocker: number; high: number; med: number; low: number };
-  };
-  resolved: Finding[];
-  newFindings: Finding[];
-  regressions: Regression[];
-  confusionHotspots: ConfusionHotspot[];
-}
+// Re-export types for backwards compatibility
+export type { Finding, Regression, ComparisonResult, ConfusionHotspot };
 
 // Simple string similarity (Jaccard similarity)
 function stringSimilarity(str1: string, str2: string): number {
@@ -90,7 +64,7 @@ function matchFindings(findingsA: Finding[], findingsB: Finding[]): Map<string, 
 }
 
 // Count findings by severity
-function countBySeverity(findings: Finding[]) {
+function countBySeverity(findings: Finding[]): FindingCounts {
   return {
     blocker: findings.filter((f) => f.severity === "Blocker").length,
     high: findings.filter((f) => f.severity === "High").length,
@@ -131,8 +105,10 @@ function extractHotspots(findings: Finding[]): ConfusionHotspot[] {
     if (finding.evidence_snippets && finding.evidence_snippets.length > 0) {
       for (const evidence of finding.evidence_snippets) {
         if (evidence.ui_anchor) {
-          const area = evidence.ui_anchor.frame_name || evidence.ui_anchor.element_label || "Unknown";
-          const element = evidence.ui_anchor.element_label || evidence.ui_anchor.element_selector || "";
+          const area =
+            evidence.ui_anchor.frame_name || evidence.ui_anchor.element_label || "Unknown";
+          const element =
+            evidence.ui_anchor.element_label || evidence.ui_anchor.element_selector || "";
 
           if (!areaMap.has(area)) {
             areaMap.set(area, { count: 0, elements: new Set() });
@@ -149,11 +125,13 @@ function extractHotspots(findings: Finding[]): ConfusionHotspot[] {
   }
 
   return Array.from(areaMap.entries())
-    .map(([area, data]) => ({
-      area,
-      issueCount: data.count,
-      elements: Array.from(data.elements).slice(0, 5), // Top 5 elements
-    }))
+    .map(
+      ([area, data]): ConfusionHotspot => ({
+        area,
+        issueCount: data.count,
+        elements: Array.from(data.elements).slice(0, 5), // Top 5 elements
+      })
+    )
     .sort((a, b) => b.issueCount - a.issueCount)
     .slice(0, 10); // Top 10 hotspots
 }
@@ -184,7 +162,7 @@ export async function compareRuns(runAId: string, runBId: string): Promise<Compa
       affectingTasks: (e.affecting_tasks as string[]) || [],
       frequency: e.frequency || 1,
       category: e.category,
-      evidence_snippets: e.evidence_snippets as any[],
+      evidence_snippets: (e.evidence_snippets || []) as EvidenceSnippet[],
     })) || [];
 
   const findingsB: Finding[] =
@@ -198,11 +176,11 @@ export async function compareRuns(runAId: string, runBId: string): Promise<Compa
       affectingTasks: (e.affecting_tasks as string[]) || [],
       frequency: e.frequency || 1,
       category: e.category,
-      evidence_snippets: e.evidence_snippets as any[],
+      evidence_snippets: (e.evidence_snippets || []) as EvidenceSnippet[],
     })) || [];
 
   // Count findings by severity
-  const findingCounts = {
+  const findingCounts: { a: FindingCounts; b: FindingCounts } = {
     a: countBySeverity(findingsA),
     b: countBySeverity(findingsB),
   };
@@ -229,7 +207,10 @@ export async function compareRuns(runAId: string, runBId: string): Promise<Compa
     const frequencyB = findingB.frequency || 1;
 
     // Regression if severity increased OR frequency increased significantly
-    if (severityOrderB > severityOrderA || (frequencyB > frequencyA && frequencyB >= frequencyA * 1.5)) {
+    if (
+      severityOrderB > severityOrderA ||
+      (frequencyB > frequencyA && frequencyB >= frequencyA * 1.5)
+    ) {
       regressions.push({
         finding: findingB,
         severityChange: compareSeverity(findingA.severity, findingB.severity),
@@ -255,4 +236,3 @@ export async function compareRuns(runAId: string, runBId: string): Promise<Compa
     confusionHotspots,
   };
 }
-

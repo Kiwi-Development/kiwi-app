@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import type { RunEvent } from "@/lib/types";
+import type { RunEvent } from "@/types";
 import { Badge } from "../../../../../components/ui/badge";
 import {
   Tooltip,

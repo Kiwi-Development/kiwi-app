@@ -107,7 +107,11 @@ function NewTestPageContent() {
             setTestName(test.title);
             setGoal(test.testData?.goal || "");
             setSelectedPersona(test.testData?.selectedPersona || "");
-            setRunCount((test.testData as any)?.runCount || 1);
+            setRunCount(
+              (test.testData && "runCount" in test.testData
+                ? (test.testData.runCount as number)
+                : undefined) || 1
+            );
             setTasks(test.testData?.tasks || []);
             setFigmaUrl(test.testData?.figmaUrlA || "");
             setLiveUrl(test.testData?.liveUrl || "");

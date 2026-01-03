@@ -20,9 +20,20 @@ import {
   SelectValue,
 } from "../../../../components/ui/select";
 import { ArrowLeft, TrendingUp, TrendingDown, AlertCircle, CheckCircle2 } from "lucide-react";
-import { testStore } from "../../../../lib/test-store";
+import { testStore, type Test } from "../../../../lib/test-store";
 import { supabase } from "../../../../lib/supabase";
 import { compareRuns } from "../../../../lib/comparison-engine";
+import type {
+  ComparisonResult,
+  Finding,
+  TestRunRow,
+  FeedbackEntryRow,
+  FindingCounts,
+  FindingCategory,
+  EvidenceSnippet,
+  Regression,
+} from "@/types";
+import type { MultiRunComparison, MultiTestComparison } from "@/types/comparison";
 
 function ComparePageContent() {
   const searchParams = useSearchParams();
@@ -45,21 +56,23 @@ function ComparePageContent() {
   if (testBId && !testIds.includes(testBId)) testIds.push(testBId);
 
   const [loading, setLoading] = useState(true);
-  const [comparison, setComparison] = useState<any>(null);
-  const [allRuns, setAllRuns] = useState<any[]>([]);
-  const [test, setTest] = useState<any>(null);
-  const [tests, setTests] = useState<any[]>([]); // Array of all tests being compared
-  const [testRuns, setTestRuns] = useState<Record<string, any[]>>({}); // Runs for each test
+  const [comparison, setComparison] = useState<
+    ComparisonResult | MultiRunComparison | MultiTestComparison | null
+  >(null);
+  const [allRuns, setAllRuns] = useState<TestRunRow[]>([]);
+  const [test, setTest] = useState<Test | null>(null);
+  const [tests, setTests] = useState<Test[]>([]); // Array of all tests being compared
+  const [testRuns, setTestRuns] = useState<Record<string, TestRunRow[]>>({}); // Runs for each test
   const [selectedRuns, setSelectedRuns] = useState<Record<string, string>>({}); // Selected run ID for each test
   // Legacy state for 2-test comparison (backwards compatibility)
-  const [runA, setRunA] = useState<any>(null);
-  const [runB, setRunB] = useState<any>(null);
-  const [testARuns, setTestARuns] = useState<any[]>([]);
-  const [testBRuns, setTestBRuns] = useState<any[]>([]);
+  const [runA, setRunA] = useState<TestRunRow | null>(null);
+  const [runB, setRunB] = useState<TestRunRow | null>(null);
+  const [testARuns, setTestARuns] = useState<TestRunRow[]>([]);
+  const [testBRuns, setTestBRuns] = useState<TestRunRow[]>([]);
   const [selectedRunAId, setSelectedRunAId] = useState<string | null>(null);
   const [selectedRunBId, setSelectedRunBId] = useState<string | null>(null);
-  const [testA, setTestA] = useState<any>(null);
-  const [testB, setTestB] = useState<any>(null);
+  const [testA, setTestA] = useState<Test | null>(null);
+  const [testB, setTestB] = useState<Test | null>(null);
 
   useEffect(() => {
     const loadComparison = async () => {
@@ -67,22 +80,26 @@ function ComparePageContent() {
       if (testId) {
         try {
           const testData = await testStore.getTestById(testId);
-          setTest(testData);
+          setTest(testData || null);
 
           // Get all runs for this test
           const { data: runs } = await supabase
             .from("test_runs")
             .select(
-              "id, created_at, status, task_completion_percentage, duration_seconds, action_count"
+              "id, test_id, created_at, status, task_completion_percentage, duration_seconds, action_count"
             )
             .eq("test_id", testId)
             .order("created_at", { ascending: false });
 
           if (runs && runs.length >= 2) {
-            setAllRuns(runs);
+            setAllRuns(runs as TestRunRow[]);
 
             // Compare all runs pairwise and aggregate results
-            const comparisons: any[] = [];
+            const comparisons: Array<{
+              runA: TestRunRow;
+              runB: TestRunRow;
+              comparison: ComparisonResult;
+            }> = [];
             for (let i = 0; i < runs.length - 1; i++) {
               for (let j = i + 1; j < runs.length; j++) {
                 const result = await compareRuns(runs[i].id, runs[j].id);
@@ -95,7 +112,7 @@ function ComparePageContent() {
             }
 
             // Aggregate findings across all comparisons
-            const aggregated = await aggregateMultiRunComparison(runs, comparisons);
+            const aggregated = await aggregateMultiRunComparison(runs as TestRunRow[], comparisons);
             setComparison(aggregated);
           } else {
             // Not enough runs to compare
@@ -118,7 +135,7 @@ function ComparePageContent() {
       try {
         // Load all test data
         const loadedTests = await Promise.all(testIds.map((id) => testStore.getTestById(id)));
-        const validTests = loadedTests.filter((t) => t !== undefined) as any[];
+        const validTests = loadedTests.filter((t): t is Test => t !== undefined);
         setTests(validTests);
 
         // For backwards compatibility, set testA and testB if we have exactly 2 tests
@@ -128,17 +145,19 @@ function ComparePageContent() {
         }
 
         // Load all runs for all tests
-        const runsMap: Record<string, any[]> = {};
+        const runsMap: Record<string, TestRunRow[]> = {};
         const selectedRunsMap: Record<string, string> = {};
 
         for (const test of validTests) {
           const { data: runs } = await supabase
             .from("test_runs")
-            .select("id, created_at")
+            .select(
+              "id, test_id, created_at, status, task_completion_percentage, duration_seconds, action_count"
+            )
             .eq("test_id", test.id)
             .order("created_at", { ascending: false });
 
-          runsMap[test.id] = runs || [];
+          runsMap[test.id] = (runs || []) as TestRunRow[];
           // Select latest run by default
           if (runs && runs.length > 0) {
             selectedRunsMap[test.id] = runs[0].id;
@@ -173,8 +192,8 @@ function ComparePageContent() {
         } else {
           // For 3+ tests, aggregate findings from all tests
           // Compare all pairs and aggregate results
-          const allFindings: any[] = [];
-          const findingCounts: Record<string, any> = {};
+          const allFindings: Finding[] = [];
+          const findingCounts: Record<string, FindingCounts> = {};
 
           for (let i = 0; i < validTests.length; i++) {
             const test = validTests[i];
@@ -190,17 +209,28 @@ function ComparePageContent() {
                 .eq("test_run_id", selectedRun.id)
                 .order("created_at", { ascending: false });
 
-              const testFindings = (entries || []).map((e: any) => ({
-                ...e,
-                testId: test.id,
-                testTitle: test.title,
-              }));
+              const testFindings = (entries || []).map(
+                (e: FeedbackEntryRow): Finding & { testId: string; testTitle: string } => ({
+                  id: e.id,
+                  title: e.title,
+                  severity: e.severity,
+                  confidence: e.confidence,
+                  description: e.description,
+                  suggestedFix: e.suggested_fix || "",
+                  affectingTasks: (e.affecting_tasks || []) as string[],
+                  frequency: e.frequency || 1,
+                  category: e.category as FindingCategory | undefined,
+                  evidence_snippets: (e.evidence_snippets || []) as EvidenceSnippet[],
+                  testId: test.id,
+                  testTitle: test.title,
+                })
+              );
 
               allFindings.push(...testFindings);
 
               // Count findings by severity for this test
               const counts = { blocker: 0, high: 0, med: 0, low: 0 };
-              testFindings.forEach((f: any) => {
+              testFindings.forEach((f) => {
                 if (f.severity === "Blocker") counts.blocker++;
                 else if (f.severity === "High") counts.high++;
                 else if (f.severity === "Med") counts.med++;
@@ -215,7 +245,7 @@ function ComparePageContent() {
             allFindings,
             findingCounts,
             isMultiTest: true,
-          });
+          } as MultiTestComparison);
         }
       } catch (error) {
         console.error("Error loading comparison:", error);
@@ -228,8 +258,18 @@ function ComparePageContent() {
   }, [testId, testIds.join(","), router]);
 
   // Aggregate findings from multiple pairwise comparisons
-  async function aggregateMultiRunComparison(runs: any[], comparisons: any[]) {
-    const allFindings = new Map<string, any>();
+  async function aggregateMultiRunComparison(
+    runs: TestRunRow[],
+    comparisons: Array<{ runA: TestRunRow; runB: TestRunRow; comparison: ComparisonResult }>
+  ): Promise<MultiRunComparison> {
+    const allFindings = new Map<
+      string,
+      Finding & {
+        appearsInRuns: Set<string>;
+        severityByRun: Record<string, string>;
+        frequencyByRun: Record<string, number>;
+      }
+    >();
     const findingCounts: Record<
       string,
       { blocker: number; high: number; med: number; low: number }
@@ -242,7 +282,7 @@ function ComparePageContent() {
     });
 
     // Fetch all findings directly from each run (more efficient than parsing comparisons)
-    const allRunFindings: Record<string, any[]> = {};
+    const allRunFindings: Record<string, FeedbackEntryRow[]> = {};
     for (const run of runs) {
       const { data: entries } = await supabase
         .from("feedback_entries")
@@ -258,7 +298,7 @@ function ComparePageContent() {
       const runNum = runIdx + 1;
       const findings = allRunFindings[run.id] || [];
 
-      findings.forEach((entry: any) => {
+      findings.forEach((entry: FeedbackEntryRow) => {
         const key = entry.title.toLowerCase();
         if (!allFindings.has(key)) {
           allFindings.set(key, {
@@ -270,8 +310,8 @@ function ComparePageContent() {
             suggestedFix: entry.suggested_fix || "",
             affectingTasks: (entry.affecting_tasks as string[]) || [],
             frequency: entry.frequency || 1,
-            category: entry.category,
-            evidence_snippets: entry.evidence_snippets || [],
+            category: (entry.category as FindingCategory | undefined) || undefined,
+            evidence_snippets: (entry.evidence_snippets || []) as EvidenceSnippet[],
             appearsInRuns: new Set(),
             severityByRun: {},
             frequencyByRun: {},
@@ -291,7 +331,7 @@ function ComparePageContent() {
 
         // Aggregate confusion hotspots from evidence snippets
         if (entry.evidence_snippets && Array.isArray(entry.evidence_snippets)) {
-          entry.evidence_snippets.forEach((evidence: any) => {
+          (entry.evidence_snippets as EvidenceSnippet[]).forEach((evidence: EvidenceSnippet) => {
             if (evidence.ui_anchor) {
               const area =
                 evidence.ui_anchor.frame_name || evidence.ui_anchor.element_label || "Unknown";
@@ -311,17 +351,16 @@ function ComparePageContent() {
     });
 
     return {
-      test,
       runs,
       allFindings: Array.from(allFindings.values()),
       findingCounts,
       confusionHotspots: Array.from(confusionHotspots.entries())
         .map(([area, data]) => ({
           area,
-          frequency: data.frequency,
+          issueCount: data.frequency,
           elements: Array.from(data.elements),
         }))
-        .sort((a, b) => b.frequency - a.frequency)
+        .sort((a, b) => b.issueCount - a.issueCount)
         .slice(0, 10), // Top 10 hotspots
     };
   }
@@ -353,8 +392,10 @@ function ComparePageContent() {
   }
 
   // Check if this is a multi-run comparison (new format) or multi-test comparison
-  const isMultiRunComparison = comparison?.runs && comparison.runs.length > 0;
-  const isMultiTestComparison = comparison?.isMultiTest === true;
+  const isMultiRunComparison =
+    comparison && "runs" in comparison && comparison.runs && comparison.runs.length > 0;
+  const isMultiTestComparison =
+    comparison && "isMultiTest" in comparison && comparison.isMultiTest === true;
 
   // Ensure test data is loaded
   if (!isMultiRunComparison && !isMultiTestComparison && (!testA || !testB) && tests.length === 0) {
@@ -377,7 +418,7 @@ function ComparePageContent() {
             </h1>
             <p className="text-muted-foreground mt-2">
               {isMultiRunComparison
-                ? `Comparing ${comparison.runs.length} runs for "${comparison.test?.title || "Test"}"`
+                ? `Comparing ${isMultiRunComparison && "runs" in comparison ? comparison.runs.length : 0} runs`
                 : isMultiTestComparison
                   ? `Comparing ${tests.length} tests`
                   : testA && testB
@@ -398,7 +439,13 @@ function ComparePageContent() {
               {/* Summary Cards for Each Test */}
               <div className="grid gap-4 md:grid-cols-3">
                 {tests.map((test, idx) => {
-                  const counts = comparison.findingCounts[test.id] || {
+                  const counts = (comparison &&
+                  "findingCounts" in comparison &&
+                  typeof comparison.findingCounts === "object" &&
+                  !("a" in comparison.findingCounts) &&
+                  test.id in comparison.findingCounts
+                    ? comparison.findingCounts[test.id]
+                    : undefined) || {
                     blocker: 0,
                     high: 0,
                     med: 0,
@@ -438,13 +485,19 @@ function ComparePageContent() {
                 <CardHeader>
                   <CardTitle>All Findings Across Tests</CardTitle>
                   <CardDescription>
-                    {comparison.allFindings?.length || 0} total findings from {tests.length} tests
+                    {comparison && "allFindings" in comparison
+                      ? comparison.allFindings?.length || 0
+                      : 0}{" "}
+                    total findings from {tests.length} tests
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {comparison.allFindings && comparison.allFindings.length > 0 ? (
-                      comparison.allFindings.map((finding: any, idx: number) => (
+                    {comparison &&
+                    "allFindings" in comparison &&
+                    comparison.allFindings &&
+                    comparison.allFindings.length > 0 ? (
+                      comparison.allFindings.map((finding: Finding, idx: number) => (
                         <div key={idx} className="border-b pb-4 last:border-0">
                           <div className="flex items-start justify-between mb-2">
                             <h4 className="font-semibold">{finding.title}</h4>
@@ -469,7 +522,9 @@ function ComparePageContent() {
                             {finding.description}
                           </p>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span>From: {finding.testTitle}</span>
+                            <span>
+                              From: {(finding as Finding & { testTitle: string }).testTitle}
+                            </span>
                           </div>
                         </div>
                       ))
@@ -497,8 +552,11 @@ function ComparePageContent() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {comparison.allFindings && comparison.allFindings.length > 0 ? (
-                      comparison.allFindings.map((finding: any, idx: number) => (
+                    {comparison &&
+                    "allFindings" in comparison &&
+                    comparison.allFindings &&
+                    comparison.allFindings.length > 0 ? (
+                      comparison.allFindings.map((finding: Finding, idx: number) => (
                         <Card key={idx} className="p-4">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
@@ -526,20 +584,29 @@ function ComparePageContent() {
                               </p>
                               <div className="flex items-center gap-2 text-xs">
                                 <span className="text-muted-foreground">Appears in:</span>
-                                {comparison.runs.map((run: any, runIdx: number) => {
-                                  const runNum = runIdx + 1;
-                                  const appears = finding.appearsInRuns?.has(`run${runNum}`);
-                                  if (!appears) return null;
-                                  return (
-                                    <Badge
-                                      key={runNum}
-                                      variant="outline"
-                                      className="text-xs bg-background border-border"
-                                    >
-                                      Run {runNum}
-                                    </Badge>
-                                  );
-                                })}
+                                {comparison &&
+                                  "runs" in comparison &&
+                                  (comparison.runs as TestRunRow[]).map(
+                                    (run: TestRunRow, runIdx: number) => {
+                                      const runNum = runIdx + 1;
+                                      const extendedFinding = finding as Finding & {
+                                        appearsInRuns?: Set<string>;
+                                      };
+                                      const appears = extendedFinding.appearsInRuns?.has(
+                                        `run${runNum}`
+                                      );
+                                      if (!appears) return null;
+                                      return (
+                                        <Badge
+                                          key={runNum}
+                                          variant="outline"
+                                          className="text-xs bg-background border-border"
+                                        >
+                                          Run {runNum}
+                                        </Badge>
+                                      );
+                                    }
+                                  )}
                               </div>
                             </div>
                           </div>
@@ -555,9 +622,9 @@ function ComparePageContent() {
               </Card>
             </div>
           </>
-        ) : (
+        ) : comparison && "resolved" in comparison ? (
           <>
-            {/* Legacy 2-Test Comparison View */}
+            {/* Legacy 2-Test Comparison View (ComparisonResult) */}
             <div className="grid gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader className="pb-3">
@@ -622,7 +689,7 @@ function ComparePageContent() {
                           </SelectTrigger>
                           <SelectContent>
                             {testARuns.map((run) => {
-                              const date = new Date(run.created_at);
+                              const date = new Date(run.created_at || "");
                               const dateStr = date.toLocaleDateString("en-US", {
                                 month: "short",
                                 day: "numeric",
@@ -659,7 +726,7 @@ function ComparePageContent() {
                           </SelectTrigger>
                           <SelectContent>
                             {testBRuns.map((run) => {
-                              const date = new Date(run.created_at);
+                              const date = new Date(run.created_at || "");
                               const dateStr = date.toLocaleDateString("en-US", {
                                 month: "short",
                                 day: "numeric",
@@ -772,7 +839,7 @@ function ComparePageContent() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {comparison.resolved.map((finding: any, idx: number) => (
+                  {comparison.resolved.map((finding: Finding, idx: number) => (
                     <div key={idx} className="p-4 border rounded-lg">
                       <div className="font-semibold">{finding.title}</div>
                       <div className="text-sm text-muted-foreground mt-1">
@@ -785,7 +852,7 @@ function ComparePageContent() {
             )}
 
             {/* New Findings */}
-            {comparison.newFindings.length > 0 && (
+            {"newFindings" in comparison && comparison.newFindings.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -798,7 +865,7 @@ function ComparePageContent() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {comparison.newFindings.map((finding: any, idx: number) => (
+                  {comparison.newFindings.map((finding: Finding, idx: number) => (
                     <div key={idx} className="p-4 border rounded-lg">
                       <div className="flex items-center justify-between mb-2">
                         <div className="font-semibold">{finding.title}</div>
@@ -823,7 +890,7 @@ function ComparePageContent() {
             )}
 
             {/* Regressions */}
-            {comparison.regressions.length > 0 && (
+            {"regressions" in comparison && comparison.regressions.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -833,7 +900,7 @@ function ComparePageContent() {
                   <CardDescription>Issues that got worse in Run B</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {comparison.regressions.map((regression: any, idx: number) => (
+                  {comparison.regressions.map((regression: Regression, idx: number) => (
                     <div key={idx} className="p-4 border rounded-lg border-orange-200">
                       <div className="font-semibold">{regression.finding.title}</div>
                       <div className="text-sm text-muted-foreground mt-1">
@@ -851,7 +918,7 @@ function ComparePageContent() {
               </Card>
             )}
           </>
-        )}
+        ) : null}
       </div>
     </AppLayout>
   );

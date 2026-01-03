@@ -1,10 +1,10 @@
 /**
  * Synthesis and Debate Logic
- * 
+ *
  * Synthesizes findings from multiple agents, prioritizes issues, and validates findings
  */
 
-import { AgentFinding } from './orchestrator';
+import { AgentFinding } from "./orchestrator";
 
 export interface SynthesisResult {
   allFindings: AgentFinding[];
@@ -16,7 +16,7 @@ export interface SynthesisResult {
 
 /**
  * Synthesize findings from all agents
- * 
+ *
  * - Removes duplicates
  * - Validates findings (requires agreement from multiple agents or high confidence)
  * - Prioritizes by severity and impact
@@ -32,9 +32,9 @@ export function synthesizeFindings(findings: AgentFinding[]): SynthesisResult {
   const sorted = sortByPriority(validated);
 
   // Categorize by severity
-  const highPriority = sorted.filter(f => f.severity === 'High');
-  const mediumPriority = sorted.filter(f => f.severity === 'Med');
-  const lowPriority = sorted.filter(f => f.severity === 'Low');
+  const highPriority = sorted.filter((f) => f.severity === "High");
+  const mediumPriority = sorted.filter((f) => f.severity === "Med");
+  const lowPriority = sorted.filter((f) => f.severity === "Low");
 
   // Generate summary
   const summary = generateSummary(sorted);
@@ -99,9 +99,9 @@ function areFindingsSimilar(f1: AgentFinding, f2: AgentFinding): boolean {
   const desc2 = f2.description.toLowerCase();
   const words1 = new Set(desc1.split(/\s+/));
   const words2 = new Set(desc2.split(/\s+/));
-  const intersection = new Set([...words1].filter(w => words2.has(w)));
+  const intersection = new Set([...words1].filter((w) => words2.has(w)));
   const similarity = intersection.size / Math.max(words1.size, words2.size);
-  
+
   return similarity > 0.5; // 50% word overlap
 }
 
@@ -114,14 +114,14 @@ function mergeFindings(findings: AgentFinding[]): AgentFinding {
   }
 
   // Use the finding with highest confidence as base
-  const base = findings.reduce((best, current) => 
+  const base = findings.reduce((best, current) =>
     current.confidence > best.confidence ? current : best
   );
 
   // Merge citations
-  const allCitations = new Map<string, AgentFinding['citations'][0]>();
-  findings.forEach(f => {
-    f.citations.forEach(citation => {
+  const allCitations = new Map<string, AgentFinding["citations"][0]>();
+  findings.forEach((f) => {
+    f.citations.forEach((citation) => {
       const key = `${citation.source}-${citation.title}`;
       if (!allCitations.has(key)) {
         allCitations.set(key, citation);
@@ -134,7 +134,7 @@ function mergeFindings(findings: AgentFinding[]): AgentFinding {
   const mergedConfidence = Math.min(base.confidence + confidenceBoost, 100);
 
   // Use highest severity
-  const severities = ['Low', 'Med', 'High'];
+  const severities = ["Low", "Med", "High"];
   const maxSeverity = findings.reduce((max, f) => {
     const maxIdx = severities.indexOf(max);
     const fIdx = severities.indexOf(f.severity);
@@ -146,7 +146,7 @@ function mergeFindings(findings: AgentFinding[]): AgentFinding {
     confidence: mergedConfidence,
     severity: maxSeverity,
     citations: Array.from(allCitations.values()),
-    description: `${base.description}\n\n[Validated by ${findings.length} specialist${findings.length > 1 ? 's' : ''}]`,
+    description: `${base.description}\n\n[Validated by ${findings.length} specialist${findings.length > 1 ? "s" : ""}]`,
   };
 }
 
@@ -154,7 +154,7 @@ function mergeFindings(findings: AgentFinding[]): AgentFinding {
  * Validate findings - filter out low-confidence findings unless multiple agents agree
  */
 function validateFindings(findings: AgentFinding[]): AgentFinding[] {
-  return findings.filter(finding => {
+  return findings.filter((finding) => {
     // High confidence findings are always valid
     if (finding.confidence >= 80) {
       return true;
@@ -166,7 +166,10 @@ function validateFindings(findings: AgentFinding[]): AgentFinding[] {
     }
 
     // Low confidence findings need multiple citations or high severity
-    if (finding.confidence >= 50 && (finding.citations.length >= 2 || finding.severity === 'High')) {
+    if (
+      finding.confidence >= 50 &&
+      (finding.citations.length >= 2 || finding.severity === "High")
+    ) {
       return true;
     }
 
@@ -179,8 +182,13 @@ function validateFindings(findings: AgentFinding[]): AgentFinding[] {
  * Sort findings by priority
  */
 function sortByPriority(findings: AgentFinding[]): AgentFinding[] {
-  const severityWeight: Record<'Blocker' | 'High' | 'Med' | 'Low', number> = { Blocker: 4, High: 3, Med: 2, Low: 1 };
-  
+  const severityWeight: Record<"Blocker" | "High" | "Med" | "Low", number> = {
+    Blocker: 4,
+    High: 3,
+    Med: 2,
+    Low: 1,
+  };
+
   return [...findings].sort((a, b) => {
     // First by severity
     const severityDiff = severityWeight[b.severity] - severityWeight[a.severity];
@@ -200,25 +208,24 @@ function sortByPriority(findings: AgentFinding[]): AgentFinding[] {
  */
 function generateSummary(findings: AgentFinding[]): string {
   if (findings.length === 0) {
-    return 'No significant issues found.';
+    return "No significant issues found.";
   }
 
-  const highCount = findings.filter(f => f.severity === 'High').length;
-  const medCount = findings.filter(f => f.severity === 'Med').length;
-  const lowCount = findings.filter(f => f.severity === 'Low').length;
+  const highCount = findings.filter((f) => f.severity === "High").length;
+  const medCount = findings.filter((f) => f.severity === "Med").length;
+  const lowCount = findings.filter((f) => f.severity === "Low").length;
 
   const parts: string[] = [];
 
   if (highCount > 0) {
-    parts.push(`${highCount} high-priority issue${highCount > 1 ? 's' : ''}`);
+    parts.push(`${highCount} high-priority issue${highCount > 1 ? "s" : ""}`);
   }
   if (medCount > 0) {
-    parts.push(`${medCount} medium-priority issue${medCount > 1 ? 's' : ''}`);
+    parts.push(`${medCount} medium-priority issue${medCount > 1 ? "s" : ""}`);
   }
   if (lowCount > 0) {
-    parts.push(`${lowCount} low-priority issue${lowCount > 1 ? 's' : ''}`);
+    parts.push(`${lowCount} low-priority issue${lowCount > 1 ? "s" : ""}`);
   }
 
-  return `Found ${findings.length} issue${findings.length > 1 ? 's' : ''}: ${parts.join(', ')}.`;
+  return `Found ${findings.length} issue${findings.length > 1 ? "s" : ""}: ${parts.join(", ")}.`;
 }
-
