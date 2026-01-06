@@ -20,9 +20,9 @@ import {
   SelectValue,
 } from "../../../../components/ui/select";
 import { ArrowLeft, TrendingUp, TrendingDown, AlertCircle, CheckCircle2 } from "lucide-react";
-import { testStore, type Test } from "../../../../lib/test-store";
+import { testStore, type Test } from "@/lib/stores";
 import { supabase } from "../../../../lib/supabase";
-import { compareRuns } from "../../../../lib/comparison-engine";
+import { compareRuns } from "@/lib/utils";
 import type {
   ComparisonResult,
   Finding,

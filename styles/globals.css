@@ -191,3 +191,16 @@
     linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
 }
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}

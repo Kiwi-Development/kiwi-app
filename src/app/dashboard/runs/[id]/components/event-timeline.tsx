@@ -4,6 +4,7 @@ import type React from "react";
 
 import type { RunEvent } from "@/types";
 import { Badge } from "../../../../../components/ui/badge";
+import { formatTimeStandard } from "../../../../../lib/utils/time-format";
 import {
   Tooltip,
   TooltipContent,
@@ -47,13 +48,7 @@ const eventVariants: Record<string, "default" | "secondary" | "destructive" | "o
 };
 
 export function EventTimeline({ events, onEventClick, highlightedEventId }: EventTimelineProps) {
-  const formatTime = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const mins = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-    return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
+  // Events use milliseconds, convert to seconds for display
 
   return (
     <TooltipProvider>
@@ -67,14 +62,14 @@ export function EventTimeline({ events, onEventClick, highlightedEventId }: Even
                   highlightedEventId === event.id ? "ring-2 ring-primary ring-offset-2" : ""
                 }`}
                 data-testid={`timeline-event-${event.id}`}
-                aria-label={`${event.label} at ${formatTime(event.t)}`}
+                aria-label={`${event.label} at ${formatTimeStandard(event.t)}`}
               >
                 <Badge
                   variant={eventVariants[event.type] || "secondary"}
                   className="flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:opacity-80"
                 >
                   {eventIcons[event.type]}
-                  <span className="text-xs font-mono">{formatTime(event.t)}</span>
+                  <span className="text-xs font-mono">{formatTimeStandard(event.t)}</span>
                 </Badge>
               </button>
             </TooltipTrigger>

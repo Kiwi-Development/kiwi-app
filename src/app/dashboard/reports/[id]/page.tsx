@@ -29,10 +29,11 @@ import {
   FileText,
   ExternalLink,
   GitCompare,
+  AlertCircle,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { testStore } from "../../../../lib/test-store";
+import { testStore } from "@/lib/stores";
 import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/dialog";
 import { Slider } from "../../../../components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/ui/tooltip";
@@ -45,6 +46,9 @@ import {
 } from "../../../../components/ui/select";
 import { ReplayPlayer } from "../../runs/[id]/components/replay-player";
 import { supabase } from "../../../../lib/supabase";
+import { ActionJourney } from "./components/action-journey";
+import { LiveLog } from "../../runs/[id]/components/live-log";
+import { SessionReplayPlayer } from "./components/session-replay-player";
 
 type ValidationStatus = "validated" | "refuted" | null;
 
@@ -130,7 +134,8 @@ interface Finding {
   developer_outputs?: DeveloperOutput; // Generated code snippets, specs, tickets
 }
 
-const findings: Finding[] = [
+// Hardcoded findings removed - now fetched from API
+const _hardcodedFindings: Finding[] = [
   {
     id: 1,
     title: "Grid view switcher lacks visual feedback",
@@ -177,7 +182,7 @@ const findings: Finding[] = [
   },
 ];
 
-import { personaStore } from "../../../../lib/persona-store";
+import { personaStore } from "@/lib/stores";
 
 // ... existing imports ...
 
@@ -202,175 +207,372 @@ export default function ReportPage() {
       created_at: string;
       status: string;
       task_completion_percentage: number | null;
+      logs?: Array<{ t: number; text: string; type?: "reasoning" | "action" }>;
+      console_trace?: unknown[];
+      general_feedback?: string | null;
     }>
   >([]);
+  const [selectedRunLogs, setSelectedRunLogs] = useState<
+    Array<{ t: number; text: string; type?: "reasoning" | "action" }>
+  >([]);
+  const [selectedRunConsoleTrace, setSelectedRunConsoleTrace] = useState<unknown[]>([]);
+  const [generalFeedback, setGeneralFeedback] = useState<string | null>(null);
+  const [isLoadingReport, setIsLoadingReport] = useState(true);
+  const [reportNotFound, setReportNotFound] = useState(false);
+  const [actionEvents, setActionEvents] = useState<
+    Array<{
+      id: string;
+      type: string;
+      label: string;
+      details?: string;
+      timestamp: number;
+      screenshotIndex?: number;
+      screenshotUrl?: string;
+      personaReasoning?: string;
+      testRunId: string;
+    }>
+  >([]);
+  const [browserbaseSessionId, setBrowserbaseSessionId] = useState<string | null>(null);
+  const [severityFilter, setSeverityFilter] = useState<string>("all"); // "all", "Blocker", "High", "Med", "Low"
+  const [sortOrder, setSortOrder] = useState<"severity" | "title">("severity");
+
+  // Filter and sort findings
+  const filteredAndSortedFindings = findingStates
+    .filter((finding) => {
+      if (severityFilter === "all") return true;
+      return finding.severity === severityFilter;
+    })
+    .sort((a, b) => {
+      if (sortOrder === "severity") {
+        // Sort by severity: Blocker > High > Med > Low
+        const severityOrder: Record<string, number> = {
+          Blocker: 0,
+          High: 1,
+          Med: 2,
+          Low: 3,
+        };
+        return (severityOrder[a.severity] ?? 99) - (severityOrder[b.severity] ?? 99);
+      } else {
+        // Sort by title alphabetically
+        return a.title.localeCompare(b.title);
+      }
+    });
 
   useEffect(() => {
     const loadData = async () => {
-      const test = await testStore.getTestById(testId);
-      setTestData(test);
+      setIsLoadingReport(true);
+      setReportNotFound(false);
+      try {
+        const test = await testStore.getTestById(testId);
+        setTestData(test);
 
-      if (test?.testData?.selectedPersona) {
-        const allPersonas = await personaStore.getPersonas();
-        const p = allPersonas.find((p) => p.id === test.testData!.selectedPersona);
-        if (p) {
-          setPersona(p);
-        }
-      }
-
-      // Load all test_runs for this test
-      const { data: allRuns } = await supabase
-        .from("test_runs")
-        .select("id, created_at, status, task_completion_percentage")
-        .eq("test_id", testId)
-        .order("created_at", { ascending: false });
-
-      if (allRuns && allRuns.length > 0) {
-        setTestRuns(allRuns);
-        // Default to latest run if no selection
-        if (!selectedRunId) {
-          setSelectedRunId(allRuns[0].id);
-        }
-      }
-
-      if (test?.findings !== undefined) {
-        // Test has findings from agent (even if empty array)
-        const allPersonas = await personaStore.getPersonas();
-        const personaName = test.testData?.selectedPersona
-          ? allPersonas.find((p) => p.id === test.testData!.selectedPersona)?.name || "User"
-          : "User";
-
-        // Load feedback entries from database to get IDs and validation data
-        // Use selected run or latest run
-        const runIdToLoad = selectedRunId || allRuns?.[0]?.id;
-        const { data: selectedRun } = await supabase
-          .from("test_runs")
-          .select("id")
-          .eq("id", runIdToLoad || "")
-          .maybeSingle();
-
-        let feedbackEntries: Array<{
-          id: string;
-          validated: boolean | null;
-          validation_note: string | null;
-          title: string;
-          severity: string;
-          confidence_level?: "Low" | "Med" | "High";
-          category?:
-            | "navigation"
-            | "copy"
-            | "affordance_feedback"
-            | "forms"
-            | "hierarchy"
-            | "accessibility"
-            | "conversion"
-            | "other";
-          frequency?: number;
-          triggered_by_tasks?: string[];
-          triggered_by_personas?: string[];
-          evidence_snippets?: EvidenceSnippet[] | null;
-          knowledge_citations?: KnowledgeCitation[] | null;
-          developer_outputs?: DeveloperOutput | null;
-          [key: string]: unknown;
-        }> = [];
-        if (selectedRun?.id) {
-          const { data } = await supabase
-            .from("feedback_entries")
-            .select("*")
-            .eq("test_run_id", selectedRun.id)
-            .order("created_at", { ascending: false });
-          feedbackEntries = data || [];
-        }
-
-        const mappedFindings = test.findings.map(
-          (
-            f: {
-              title: string;
-              severity: string;
-              confidence?: number;
-              category?: string;
-              description?: string;
-              suggestedFix?: string;
-              affectingTasks?: string[];
-              citations?: KnowledgeCitation[];
-              knowledge_citations?: KnowledgeCitation[];
-              developer_outputs?: DeveloperOutput;
-            },
-            index: number
-          ) => {
-            // Find matching feedback entry by title (or use index as fallback)
-            const feedbackEntry =
-              feedbackEntries.find((fe) => fe.title === f.title) || feedbackEntries[index];
-
-            // Get citations from feedback entry or finding
-            const citations =
-              feedbackEntry?.knowledge_citations || f.knowledge_citations || f.citations || [];
-            const developerOutputs = feedbackEntry?.developer_outputs || f.developer_outputs;
-
-            // Ensure confidence is a number
-            const confidenceValue =
-              typeof f.confidence === "number"
-                ? f.confidence
-                : typeof feedbackEntry?.confidence === "number"
-                  ? feedbackEntry.confidence
-                  : 0;
-
-            // Ensure category is valid
-            const validCategories = [
-              "navigation",
-              "copy",
-              "affordance_feedback",
-              "forms",
-              "hierarchy",
-              "accessibility",
-              "conversion",
-              "other",
-            ] as const;
-            const categoryValue = (feedbackEntry?.category || f.category) as
-              | (typeof validCategories)[number]
-              | undefined;
-            const category =
-              categoryValue && validCategories.includes(categoryValue) ? categoryValue : undefined;
-
-            return {
-              id: index + 1,
-              feedbackEntryId: feedbackEntry?.id,
-              title: f.title,
-              severity: f.severity,
-              confidence: confidenceValue,
-              confidence_level: feedbackEntry?.confidence_level,
-              category: category,
-              frequency: feedbackEntry?.frequency || 1,
-              triggered_by_tasks: feedbackEntry?.triggered_by_tasks || f.affectingTasks || [],
-              triggered_by_personas:
-                feedbackEntry?.triggered_by_personas ||
-                (test.testData?.selectedPersona ? [personaName] : []),
-              evidence_snippets:
-                feedbackEntry?.evidence_snippets && Array.isArray(feedbackEntry.evidence_snippets)
-                  ? feedbackEntry.evidence_snippets
-                  : [],
-              ood: false, // Default
-              timestamp: "00:00", // Default
-              description: f.description ?? "",
-              suggestedFix: f.suggestedFix ?? "",
-              affectingTasks: f.affectingTasks ?? [],
-              affectingPersonas: test.testData?.selectedPersona ? [personaName] : [],
-              validated: (feedbackEntry?.validated === true
-                ? "validated"
-                : feedbackEntry?.validated === false
-                  ? "refuted"
-                  : null) as ValidationStatus,
-              note: feedbackEntry?.validation_note || "",
-              hasUnsavedChanges: false,
-              knowledge_citations: Array.isArray(citations) ? citations : [],
-              developer_outputs: developerOutputs || undefined,
-            };
+        if (test?.testData?.selectedPersona) {
+          const allPersonas = await personaStore.getPersonas();
+          const p = allPersonas.find((p) => p.id === test.testData!.selectedPersona);
+          if (p) {
+            setPersona(p);
           }
-        );
-        setFindingStates(mappedFindings);
-      } else {
-        // Test not run yet - show demo findings
-        setFindingStates(findings);
+        }
+
+        // Load all test_runs for this test
+        // Note: console_trace column doesn't exist in database schema yet, so we only select logs
+        const { data: allRuns } = await supabase
+          .from("test_runs")
+          .select(
+            "id, created_at, status, task_completion_percentage, logs, general_feedback, events, browserbase_session_id"
+          )
+          .eq("test_id", testId)
+          .order("created_at", { ascending: false });
+
+        if (allRuns && allRuns.length > 0) {
+          setTestRuns(allRuns);
+          // Default to latest run if no selection
+          if (!selectedRunId) {
+            setSelectedRunId(allRuns[0].id);
+          }
+          // Load logs, events, and session replay for selected run
+          const runToLoad = allRuns.find((r) => r.id === (selectedRunId || allRuns[0].id));
+          if (runToLoad) {
+            const logs =
+              (runToLoad.logs as Array<{
+                t: number;
+                text: string;
+                type?: "reasoning" | "action";
+              }>) || [];
+            setSelectedRunLogs(logs);
+            // Note: console_trace column doesn't exist in database schema yet
+            setSelectedRunConsoleTrace([]);
+
+            // Load events for this run
+            if ((runToLoad as any).events && Array.isArray((runToLoad as any).events)) {
+              const events = (runToLoad as any).events.map((event: any, index: number) => ({
+                id: event.id || `event-${index}`,
+                type: event.type || "click",
+                label: event.label || "Action",
+                details: event.details,
+                timestamp:
+                  typeof event.t === "number"
+                    ? event.t > 1000000000000
+                      ? event.t / 1000
+                      : event.t
+                    : 0,
+                screenshotIndex: event.screenshotIndex,
+                testRunId: runToLoad.id,
+              }));
+              setActionEvents(events);
+            } else {
+              setActionEvents([]);
+            }
+
+            // Get browserbase session ID for replay
+            // Recordings are available about 30 seconds after session close
+            // The replay uses rrweb events to reconstruct the DOM
+            if ((runToLoad as any).browserbase_session_id) {
+              const sessionId = (runToLoad as any).browserbase_session_id;
+              setBrowserbaseSessionId(sessionId);
+            } else {
+              setBrowserbaseSessionId(null);
+            }
+          }
+        }
+
+        // Fetch findings from API for the selected run (or latest completed run)
+        const runIdToLoad =
+          selectedRunId || allRuns?.find((r) => r.status === "completed")?.id || allRuns?.[0]?.id;
+
+        if (runIdToLoad) {
+          // Set general feedback from the selected run
+          const runToLoadForFeedback = allRuns?.find((r) => r.id === runIdToLoad);
+          if (runToLoadForFeedback && (runToLoadForFeedback as any).general_feedback) {
+            setGeneralFeedback((runToLoadForFeedback as any).general_feedback);
+          } else {
+            setGeneralFeedback(null);
+          }
+
+          try {
+            // Fetch report data from API
+            const reportResponse = await fetch(`/api/reports/${runIdToLoad}`);
+            if (reportResponse.ok) {
+              const reportData = await reportResponse.json();
+              const apiFindings = reportData.findings || [];
+
+              const allPersonas = await personaStore.getPersonas();
+              const personaName = test?.testData?.selectedPersona
+                ? allPersonas.find((p) => p.id === test.testData!.selectedPersona)?.name || "User"
+                : "User";
+
+              // Map API findings to Finding interface
+              const mappedFindings = apiFindings.map(
+                (
+                  f: {
+                    title: string;
+                    severity: string;
+                    confidence?: number;
+                    category?: string;
+                    description?: string;
+                    suggestedFix?: string;
+                    affectingTasks?: string[];
+                    triggeredByTasks?: string[];
+                    triggeredByPersonas?: string[];
+                    evidenceSnippets?: EvidenceSnippet[];
+                    knowledgeCitations?: KnowledgeCitation[];
+                    developerOutputs?: DeveloperOutput;
+                    id?: string;
+                  },
+                  index: number
+                ) => {
+                  // Get citations and developer outputs from finding
+                  const citations = f.knowledgeCitations || [];
+                  const developerOutputs = f.developerOutputs;
+
+                  // Ensure confidence is a number
+                  const confidenceValue =
+                    typeof f.confidence === "number" && f.confidence !== undefined
+                      ? f.confidence
+                      : 0;
+
+                  // Ensure category is valid
+                  const validCategories = [
+                    "navigation",
+                    "copy",
+                    "affordance_feedback",
+                    "forms",
+                    "hierarchy",
+                    "accessibility",
+                    "conversion",
+                    "other",
+                  ] as const;
+                  const categoryValue = f.category as (typeof validCategories)[number] | undefined;
+                  const category =
+                    categoryValue && validCategories.includes(categoryValue)
+                      ? categoryValue
+                      : undefined;
+
+                  // Map severity to match Finding interface
+                  const severityMap: Record<string, string> = {
+                    Blocker: "High",
+                    High: "High",
+                    Med: "Med",
+                    Low: "Low",
+                  };
+                  const severity = severityMap[f.severity] || f.severity;
+
+                  return {
+                    id: index + 1,
+                    feedbackEntryId: f.id, // Use finding ID from database
+                    title: f.title,
+                    severity: severity,
+                    confidence: confidenceValue,
+                    confidence_level:
+                      (f.confidence ?? 0) >= 70
+                        ? "High"
+                        : (f.confidence ?? 0) >= 40
+                          ? "Med"
+                          : "Low",
+                    category: category,
+                    frequency: 1, // Default
+                    triggered_by_tasks: f.triggeredByTasks || f.affectingTasks || [],
+                    triggered_by_personas:
+                      f.triggeredByPersonas ||
+                      (test?.testData?.selectedPersona ? [personaName] : []),
+                    evidence_snippets: f.evidenceSnippets || [],
+                    ood: false, // Default
+                    timestamp: "00:00", // Default
+                    description: f.description || "",
+                    suggestedFix: f.suggestedFix || "",
+                    affectingTasks: f.affectingTasks || f.triggeredByTasks || [],
+                    affectingPersonas: test?.testData?.selectedPersona ? [personaName] : [],
+                    validated: null as ValidationStatus, // Will be loaded from feedback_entries if exists
+                    note: "",
+                    hasUnsavedChanges: false,
+                    knowledge_citations: Array.isArray(citations) ? citations : [],
+                    developer_outputs: developerOutputs || undefined,
+                  };
+                }
+              );
+
+              // Load validation data from feedback_entries for existing findings
+              const { data: feedbackEntries } = await supabase
+                .from("feedback_entries")
+                .select("id, validated, validation_note")
+                .eq("test_run_id", runIdToLoad);
+
+              // Merge validation data
+              const findingsWithValidation = mappedFindings.map((finding: Finding) => {
+                const feedbackEntry = feedbackEntries?.find(
+                  (fe) => fe.id === finding.feedbackEntryId
+                );
+                if (feedbackEntry) {
+                  return {
+                    ...finding,
+                    validated: (feedbackEntry.validated === true
+                      ? "validated"
+                      : feedbackEntry.validated === false
+                        ? "refuted"
+                        : null) as ValidationStatus,
+                    note: feedbackEntry.validation_note || "",
+                  };
+                }
+                return finding;
+              });
+
+              setFindingStates(findingsWithValidation);
+
+              // Fetch events for the test run - try to get from events column, or derive from evidence snippets
+              try {
+                const { data: runData } = await supabase
+                  .from("test_runs")
+                  .select("events")
+                  .eq("id", runIdToLoad)
+                  .single();
+
+                if (runData?.events && Array.isArray(runData.events)) {
+                  const events = runData.events.map((event: any, index: number) => ({
+                    id: event.id || `event-${index}`,
+                    type: event.type || "click",
+                    label: event.label || "Action",
+                    details: event.details,
+                    timestamp:
+                      typeof event.t === "number"
+                        ? event.t > 1000000000000
+                          ? event.t / 1000
+                          : event.t
+                        : 0,
+                    screenshotIndex: event.screenshotIndex,
+                    testRunId: runIdToLoad,
+                  }));
+                  setActionEvents(events);
+                } else {
+                  // If no events column, derive events from evidence snippets in findings
+                  const eventsFromFindings: typeof actionEvents = [];
+                  findingsWithValidation.forEach((finding: Finding, findingIndex: number) => {
+                    if (finding.evidence_snippets && Array.isArray(finding.evidence_snippets)) {
+                      finding.evidence_snippets.forEach(
+                        (evidence: EvidenceSnippet, evidenceIndex: number) => {
+                          if (evidence.timestamp || evidence.screenshot_index !== undefined) {
+                            eventsFromFindings.push({
+                              id: `finding-${findingIndex}-evidence-${evidenceIndex}`,
+                              type: "click",
+                              label: finding.title.substring(0, 30) + "...",
+                              details:
+                                evidence.what_happened_steps?.join(", ") || evidence.persona_quote,
+                              timestamp: evidence.timestamp
+                                ? parseFloat(evidence.timestamp.replace(":", ".")) * 60
+                                : 0,
+                              screenshotIndex: evidence.screenshot_index,
+                              testRunId: runIdToLoad,
+                            });
+                          }
+                        }
+                      );
+                    }
+                  });
+                  setActionEvents(eventsFromFindings);
+                }
+              } catch (error) {
+                console.warn("Could not fetch events:", error);
+                setActionEvents([]);
+              }
+            } else if (reportResponse.status === 404) {
+              // Report not found - show helpful message
+              console.log("No report found for run:", runIdToLoad);
+              setFindingStates([]);
+              setActionEvents([]);
+              setReportNotFound(true);
+              toast({
+                title: "Report not available",
+                description:
+                  "This test run doesn't have a report yet. Reports are generated after test completion.",
+                variant: "default",
+              });
+            } else {
+              // Other error
+              console.log("Error fetching report:", reportResponse.status);
+              setFindingStates([]);
+              setActionEvents([]);
+              toast({
+                title: "Error",
+                description: `Failed to load report (${reportResponse.status})`,
+                variant: "destructive",
+              });
+            }
+          } catch (error) {
+            console.error("Error fetching report:", error);
+            toast({
+              title: "Error",
+              description: "Failed to load report findings",
+              variant: "destructive",
+            });
+            setFindingStates([]);
+            setActionEvents([]);
+          }
+        } else {
+          // No run available - show empty state
+          setFindingStates([]);
+        }
+      } finally {
+        // Always clear loading state
+        setIsLoadingReport(false);
       }
     };
     loadData();
@@ -663,6 +865,23 @@ export default function ReportPage() {
     window.print();
   };
 
+  if (isLoadingReport) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppLayout>
+          <main className="container mx-auto p-6">
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="text-center space-y-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
+                <p className="text-muted-foreground">Loading report...</p>
+              </div>
+            </div>
+          </main>
+        </AppLayout>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background print:bg-white print:h-auto print:overflow-visible">
       <AppLayout>
@@ -699,12 +918,59 @@ export default function ReportPage() {
               {testRuns.length > 1 && (
                 <>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Run:</span>
                     <Select
                       value={selectedRunId || testRuns[0]?.id || ""}
-                      onValueChange={setSelectedRunId}
+                      onValueChange={(runId) => {
+                        setSelectedRunId(runId);
+                        // Update logs and console trace when run changes
+                        const run = testRuns.find((r) => r.id === runId);
+                        if (run) {
+                          setSelectedRunLogs(
+                            (run.logs as Array<{
+                              t: number;
+                              text: string;
+                              type?: "reasoning" | "action";
+                            }>) || []
+                          );
+                          setSelectedRunConsoleTrace((run.console_trace as unknown[]) || []);
+                          // Update general feedback when run changes
+                          if ((run as any).general_feedback) {
+                            setGeneralFeedback((run as any).general_feedback);
+                          } else {
+                            setGeneralFeedback(null);
+                          }
+                          // Update events when run changes
+                          if ((run as any).events && Array.isArray((run as any).events)) {
+                            const events = (run as any).events.map((event: any, index: number) => ({
+                              id: event.id || `event-${index}`,
+                              type: event.type || "click",
+                              label: event.label || "Action",
+                              details: event.details,
+                              timestamp:
+                                typeof event.t === "number"
+                                  ? event.t > 1000000000000
+                                    ? event.t / 1000
+                                    : event.t
+                                  : 0,
+                              screenshotIndex: event.screenshotIndex,
+                              testRunId: runId,
+                            }));
+                            setActionEvents(events);
+                          } else {
+                            setActionEvents([]);
+                          }
+
+                          // Update browserbase session ID when run changes
+                          if ((run as any).browserbase_session_id) {
+                            const sessionId = (run as any).browserbase_session_id;
+                            setBrowserbaseSessionId(sessionId);
+                          } else {
+                            setBrowserbaseSessionId(null);
+                          }
+                        }
+                      }}
                     >
-                      <SelectTrigger className="w-[200px]">
+                      <SelectTrigger className="w-auto min-w-[200px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -761,388 +1027,478 @@ export default function ReportPage() {
           <div className="space-y-6 mt-6">
             <div className="grid gap-6 md:grid-cols-3">
               <Card className="w-full">
-                <CardHeader className="pb-3">
-                  <CardDescription>Task Success</CardDescription>
+                <CardHeader className="pb-0">
+                  <CardDescription className="mb-0">Task Success</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-0">
                   <div className="text-3xl font-bold">{testData?.successRate ?? 0}%</div>
                 </CardContent>
               </Card>
               <Card className="w-full">
-                <CardHeader className="pb-3">
-                  <CardDescription>Time</CardDescription>
+                <CardHeader className="pb-0">
+                  <CardDescription className="mb-0">Time</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-0">
                   <div className="text-3xl font-bold">
                     {testData?.duration ? formatDuration(testData.duration) : "0:00"}
                   </div>
                 </CardContent>
               </Card>
               <Card className="w-full">
-                <CardHeader className="pb-3">
-                  <CardDescription>Actions</CardDescription>
+                <CardHeader className="pb-0">
+                  <CardDescription className="mb-0">Actions</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-0">
                   <div className="text-3xl font-bold">{testData?.actionCount || 0}</div>
                 </CardContent>
               </Card>
             </div>
 
             <div className="space-y-6">
-              {testData?.feedback && (
-                <Card className="border-primary/20 bg-primary/5">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-primary" />
-                      Agent Feedback
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-base leading-relaxed whitespace-pre-wrap">
-                      {testData.feedback}
-                    </p>
-                  </CardContent>
-                </Card>
+              <Card className="border-primary/20 bg-primary/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    Overall Agent Feedback
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-base leading-relaxed whitespace-pre-wrap">
+                    {generalFeedback ||
+                      testData?.feedback ||
+                      "The test run completed successfully. All tasks were executed and the persona navigated through the interface as expected."}
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Session Replay */}
+              {browserbaseSessionId && (
+                <SessionReplayPlayer
+                  sessionId={browserbaseSessionId}
+                  collapsible={true}
+                  defaultOpen={true}
+                />
               )}
 
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold">Findings</h2>
+              {/* Action Journey and Live Logs */}
+              <div className="grid gap-6 md:grid-cols-2">
+                <ActionJourney
+                  events={actionEvents}
+                  testRunId={selectedRunId || testRuns[0]?.id || ""}
+                  logs={selectedRunLogs}
+                />
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Live Logs</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <LiveLog logs={selectedRunLogs} />
+                  </CardContent>
+                </Card>
               </div>
 
-              {findingStates.map((finding) => (
-                <Card key={finding.id} className="relative">
-                  <CardHeader>
-                    <div className="flex items-start gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <Badge
-                            variant={
-                              finding.severity === "Blocker" || finding.severity === "High"
-                                ? "destructive"
-                                : finding.severity === "Med"
-                                  ? "default"
-                                  : "secondary"
-                            }
-                          >
-                            {finding.severity}
-                          </Badge>
-                          {finding.category && (
-                            <Badge variant="outline" className="capitalize">
-                              {finding.category.replace("_", " ")}
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <h2 className="text-2xl font-bold">Findings</h2>
+                <div className="flex items-center gap-2">
+                  <Select value={severityFilter} onValueChange={setSeverityFilter}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Filter by severity" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Severities</SelectItem>
+                      <SelectItem value="Blocker">Blocker</SelectItem>
+                      <SelectItem value="High">High</SelectItem>
+                      <SelectItem value="Med">Med</SelectItem>
+                      <SelectItem value="Low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={sortOrder}
+                    onValueChange={(value) => setSortOrder(value as "severity" | "title")}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="severity">Sort by Severity</SelectItem>
+                      <SelectItem value="title">Sort by Title</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {reportNotFound ? (
+                <Card>
+                  <CardContent className="py-12">
+                    <div className="text-center space-y-4">
+                      <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground" />
+                      <div>
+                        <h3 className="text-lg font-semibold mb-2">Report Not Available</h3>
+                        <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                          This test run doesn't have a report yet. Reports are automatically
+                          generated after test completion. If the test run has completed, the report
+                          may still be processing. Please try refreshing the page.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : filteredAndSortedFindings.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12">
+                    <div className="text-center space-y-4">
+                      <CheckCircle2 className="h-12 w-12 mx-auto text-muted-foreground" />
+                      <div>
+                        <h3 className="text-lg font-semibold mb-2">No Findings</h3>
+                        <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                          {severityFilter !== "all"
+                            ? `No findings found with severity "${severityFilter}". Try selecting a different filter.`
+                            : "This test run completed without generating any findings."}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                filteredAndSortedFindings.map((finding) => (
+                  <Card key={finding.id} className="relative">
+                    <CardHeader>
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <Badge
+                              variant={
+                                finding.severity === "Blocker" || finding.severity === "High"
+                                  ? "destructive"
+                                  : finding.severity === "Med"
+                                    ? "secondary"
+                                    : "secondary"
+                              }
+                              className={
+                                finding.severity === "Med"
+                                  ? "bg-yellow-500 text-yellow-50 border-yellow-600 hover:bg-yellow-600"
+                                  : undefined
+                              }
+                            >
+                              {finding.severity}
                             </Badge>
-                          )}
-                          {finding.frequency && finding.frequency > 1 && (
-                            <Badge variant="secondary">{finding.frequency}x</Badge>
-                          )}
-                          <span className="text-sm text-muted-foreground">
-                            Confidence: {finding.confidence}%
-                          </span>
-                        </div>
-                        <CardTitle className="text-xl">{finding.title}</CardTitle>
-                        <CardDescription className="text-base">
-                          {finding.description}
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="p-4 rounded-lg bg-muted/50">
-                      <div className="flex items-start gap-3">
-                        <Target className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                        <div className="space-y-2 flex-1">
-                          <p className="text-sm font-semibold">Suggested Fix</p>
-                          <p className="text-sm text-muted-foreground">{finding.suggestedFix}</p>
+                            {finding.category && (
+                              <Badge variant="outline" className="capitalize">
+                                {finding.category.replace("_", " ")}
+                              </Badge>
+                            )}
+                            {finding.frequency && finding.frequency > 1 && (
+                              <Badge variant="secondary">{finding.frequency}x</Badge>
+                            )}
+                          </div>
+                          <CardTitle className="text-xl">{finding.title}</CardTitle>
+                          <CardDescription className="text-base">
+                            {finding.description}
+                          </CardDescription>
                         </div>
                       </div>
-                    </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="p-4 rounded-lg bg-muted/50">
+                        <div className="flex items-start gap-3">
+                          <Target className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                          <div className="space-y-2 flex-1">
+                            <p className="text-sm font-semibold">Suggested Fix</p>
+                            <p className="text-sm text-muted-foreground">{finding.suggestedFix}</p>
+                          </div>
+                        </div>
+                      </div>
 
-                    {/* Knowledge Citations - Hidden per user request */}
+                      {/* Knowledge Citations - Hidden per user request */}
 
-                    {/* Evidence Snippets */}
-                    {finding.evidence_snippets &&
-                      Array.isArray(finding.evidence_snippets) &&
-                      finding.evidence_snippets.length > 0 && (
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <div className="flex items-start gap-3">
-                            <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                            <div className="space-y-4 flex-1">
-                              <p className="text-sm font-semibold">Evidence</p>
-                              {finding.evidence_snippets.map((evidence, idx) => (
-                                <div
-                                  key={idx}
-                                  className="p-3 rounded-md bg-background border border-border space-y-2"
-                                >
-                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <span className="font-medium">{evidence.persona_name}</span>
-                                    <span>•</span>
-                                    <span>{evidence.persona_role}</span>
-                                    {evidence.task_context && (
-                                      <>
-                                        <span>•</span>
-                                        <span>{evidence.task_context}</span>
-                                      </>
-                                    )}
-                                  </div>
+                      {/* Evidence Snippets */}
+                      {finding.evidence_snippets &&
+                        Array.isArray(finding.evidence_snippets) &&
+                        finding.evidence_snippets.length > 0 && (
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <div className="flex items-start gap-3">
+                              <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                              <div className="space-y-4 flex-1">
+                                <p className="text-sm font-semibold">Evidence</p>
+                                {finding.evidence_snippets.map((evidence, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="p-3 rounded-md bg-background border border-border space-y-2"
+                                  >
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <span className="font-medium">{evidence.persona_name}</span>
+                                      <span>•</span>
+                                      <span>{evidence.persona_role}</span>
+                                      {evidence.task_context && (
+                                        <>
+                                          <span>•</span>
+                                          <span>{evidence.task_context}</span>
+                                        </>
+                                      )}
+                                    </div>
 
-                                  {evidence.what_happened_steps &&
-                                    evidence.what_happened_steps.length > 0 && (
-                                      <div className="space-y-1">
-                                        <p className="text-xs font-medium">What happened:</p>
-                                        <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5">
-                                          {evidence.what_happened_steps.map((step, stepIdx) => (
-                                            <li key={stepIdx}>{step}</li>
-                                          ))}
-                                        </ul>
+                                    {evidence.what_happened_steps &&
+                                      evidence.what_happened_steps.length > 0 && (
+                                        <div className="space-y-1">
+                                          <p className="text-xs font-medium">What happened:</p>
+                                          <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5">
+                                            {evidence.what_happened_steps.map((step, stepIdx) => (
+                                              <li key={stepIdx}>{step}</li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+
+                                    {evidence.persona_quote && (
+                                      <div className="p-2 rounded bg-muted/50 border-l-2 border-primary">
+                                        <p className="text-xs italic text-muted-foreground">
+                                          &ldquo;{evidence.persona_quote}&rdquo;
+                                        </p>
                                       </div>
                                     )}
 
-                                  {evidence.persona_quote && (
-                                    <div className="p-2 rounded bg-muted/50 border-l-2 border-primary">
-                                      <p className="text-xs italic text-muted-foreground">
-                                        &ldquo;{evidence.persona_quote}&rdquo;
-                                      </p>
-                                    </div>
-                                  )}
+                                    {evidence.ui_anchor && (
+                                      <div className="text-xs text-muted-foreground">
+                                        <span className="font-medium">UI Element:</span>{" "}
+                                        {evidence.ui_anchor.element_label ||
+                                          evidence.ui_anchor.element_selector ||
+                                          "Unknown"}
+                                        {evidence.ui_anchor.frame_name && (
+                                          <span className="ml-2">
+                                            ({evidence.ui_anchor.frame_name})
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
-                                  {evidence.ui_anchor && (
-                                    <div className="text-xs text-muted-foreground">
-                                      <span className="font-medium">UI Element:</span>{" "}
-                                      {evidence.ui_anchor.element_label ||
-                                        evidence.ui_anchor.element_selector ||
-                                        "Unknown"}
-                                      {evidence.ui_anchor.frame_name && (
-                                        <span className="ml-2">
-                                          ({evidence.ui_anchor.frame_name})
-                                        </span>
+                      {/* Developer Outputs */}
+                      {finding.developer_outputs &&
+                        ((finding.developer_outputs.codeSnippets?.length ?? 0) > 0 ||
+                          (finding.developer_outputs.specs?.length ?? 0) > 0 ||
+                          (finding.developer_outputs.tickets?.length ?? 0) > 0) && (
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <div className="flex items-start gap-3">
+                              <Code className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+                              <div className="space-y-4 flex-1">
+                                <p className="text-sm font-semibold">Developer Outputs</p>
+
+                                {/* Code Snippets */}
+                                {finding.developer_outputs.codeSnippets &&
+                                  finding.developer_outputs.codeSnippets.length > 0 && (
+                                    <div className="space-y-3">
+                                      <p className="text-xs font-medium text-muted-foreground">
+                                        Code Snippets
+                                      </p>
+                                      {finding.developer_outputs.codeSnippets.map(
+                                        (snippet, idx) => (
+                                          <div
+                                            key={idx}
+                                            className="p-3 rounded-md bg-background border border-border"
+                                          >
+                                            <div className="flex items-center gap-2 mb-2">
+                                              <Badge variant="outline" className="text-xs">
+                                                {snippet.language}
+                                              </Badge>
+                                              <span className="text-xs text-muted-foreground">
+                                                {snippet.description}
+                                              </span>
+                                            </div>
+                                            <pre className="text-xs bg-muted p-2 rounded overflow-x-auto">
+                                              <code>{snippet.code}</code>
+                                            </pre>
+                                          </div>
+                                        )
                                       )}
                                     </div>
                                   )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
 
-                    {/* Developer Outputs */}
-                    {finding.developer_outputs &&
-                      ((finding.developer_outputs.codeSnippets?.length ?? 0) > 0 ||
-                        (finding.developer_outputs.specs?.length ?? 0) > 0 ||
-                        (finding.developer_outputs.tickets?.length ?? 0) > 0) && (
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <div className="flex items-start gap-3">
-                            <Code className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
-                            <div className="space-y-4 flex-1">
-                              <p className="text-sm font-semibold">Developer Outputs</p>
-
-                              {/* Code Snippets */}
-                              {finding.developer_outputs.codeSnippets &&
-                                finding.developer_outputs.codeSnippets.length > 0 && (
-                                  <div className="space-y-3">
-                                    <p className="text-xs font-medium text-muted-foreground">
-                                      Code Snippets
-                                    </p>
-                                    {finding.developer_outputs.codeSnippets.map((snippet, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="p-3 rounded-md bg-background border border-border"
-                                      >
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <Badge variant="outline" className="text-xs">
-                                            {snippet.language}
-                                          </Badge>
-                                          <span className="text-xs text-muted-foreground">
-                                            {snippet.description}
-                                          </span>
+                                {/* Specs */}
+                                {finding.developer_outputs.specs &&
+                                  finding.developer_outputs.specs.length > 0 && (
+                                    <div className="space-y-3">
+                                      <p className="text-xs font-medium text-muted-foreground">
+                                        Specifications
+                                      </p>
+                                      {finding.developer_outputs.specs.map((spec, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="p-3 rounded-md bg-background border border-border"
+                                        >
+                                          <p className="text-xs text-muted-foreground mb-2">
+                                            {spec.description}
+                                          </p>
+                                          <pre className="text-xs bg-muted p-2 rounded overflow-x-auto">
+                                            <code>{spec.content}</code>
+                                          </pre>
                                         </div>
-                                        <pre className="text-xs bg-muted p-2 rounded overflow-x-auto">
-                                          <code>{snippet.code}</code>
-                                        </pre>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-
-                              {/* Specs */}
-                              {finding.developer_outputs.specs &&
-                                finding.developer_outputs.specs.length > 0 && (
-                                  <div className="space-y-3">
-                                    <p className="text-xs font-medium text-muted-foreground">
-                                      Specifications
-                                    </p>
-                                    {finding.developer_outputs.specs.map((spec, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="p-3 rounded-md bg-background border border-border"
-                                      >
-                                        <p className="text-xs text-muted-foreground mb-2">
-                                          {spec.description}
-                                        </p>
-                                        <pre className="text-xs bg-muted p-2 rounded overflow-x-auto">
-                                          <code>{spec.content}</code>
-                                        </pre>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-
-                              {/* Tickets */}
-                              {finding.developer_outputs.tickets &&
-                                finding.developer_outputs.tickets.length > 0 && (
-                                  <div className="space-y-3">
-                                    <p className="text-xs font-medium text-muted-foreground">
-                                      Issue Tickets
-                                    </p>
-                                    {finding.developer_outputs.tickets.map((ticket, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="p-3 rounded-md bg-background border border-border"
-                                      >
-                                        <div className="flex items-start justify-between gap-2 mb-2">
-                                          <p className="text-sm font-medium">{ticket.title}</p>
-                                          <div className="flex gap-1 flex-wrap">
-                                            {ticket.labels.map((label, labelIdx) => (
-                                              <Badge
-                                                key={labelIdx}
-                                                variant="outline"
-                                                className="text-xs"
-                                              >
-                                                {label}
-                                              </Badge>
-                                            ))}
-                                          </div>
-                                        </div>
-                                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                                          {ticket.body}
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                    {/* Show which tasks are affected, if any */}
-                    {finding.affectingTasks && finding.affectingTasks.length > 0 && (
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className="font-medium">Affects tasks:</span>
-                          <div className="flex gap-2 flex-wrap">
-                            {finding.affectingTasks.map((task, idx) => {
-                              // Handle both string ("Task 1") and number (1) formats
-                              let taskIndex: number | null = null;
-
-                              if (typeof task === "number") {
-                                // If it's a number, use it directly (1-indexed)
-                                taskIndex = task - 1;
-                              } else {
-                                // If it's a string, try to extract the number
-                                const taskStr = String(task);
-                                const taskMatch =
-                                  taskStr.match(/Task (\d+)/i) || taskStr.match(/(\d+)/);
-                                taskIndex = taskMatch ? parseInt(taskMatch[1]) - 1 : null;
-                              }
-
-                              const taskDescription =
-                                taskIndex !== null &&
-                                taskIndex >= 0 &&
-                                testData?.testData?.tasks?.[taskIndex]
-                                  ? testData.testData.tasks[taskIndex]
-                                  : null;
-
-                              // Display the task identifier
-                              const displayText =
-                                typeof task === "number" ? `Task ${task}` : String(task);
-
-                              return (
-                                <Tooltip key={idx}>
-                                  <TooltipTrigger asChild>
-                                    <Badge variant="outline" className="text-xs cursor-help">
-                                      {displayText}
-                                    </Badge>
-                                  </TooltipTrigger>
-                                  {taskDescription && (
-                                    <TooltipContent>
-                                      <p className="max-w-xs">{taskDescription}</p>
-                                    </TooltipContent>
+                                      ))}
+                                    </div>
                                   )}
-                                </Tooltip>
-                              );
-                            })}
+
+                                {/* Tickets */}
+                                {finding.developer_outputs.tickets &&
+                                  finding.developer_outputs.tickets.length > 0 && (
+                                    <div className="space-y-3">
+                                      <p className="text-xs font-medium text-muted-foreground">
+                                        Issue Tickets
+                                      </p>
+                                      {finding.developer_outputs.tickets.map((ticket, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="p-3 rounded-md bg-background border border-border"
+                                        >
+                                          <div className="flex items-start justify-between gap-2 mb-2">
+                                            <p className="text-sm font-medium">{ticket.title}</p>
+                                            <div className="flex gap-1 flex-wrap">
+                                              {ticket.labels.map((label, labelIdx) => (
+                                                <Badge
+                                                  key={labelIdx}
+                                                  variant="outline"
+                                                  className="text-xs"
+                                                >
+                                                  {label}
+                                                </Badge>
+                                              ))}
+                                            </div>
+                                          </div>
+                                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                                            {ticket.body}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                      {/* Show which tasks are affected, if any */}
+                      {finding.affectingTasks && finding.affectingTasks.length > 0 && (
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span className="font-medium">Affects tasks:</span>
+                            <div className="flex gap-2 flex-wrap">
+                              {finding.affectingTasks.map((task, idx) => {
+                                // Handle both string ("Task 1") and number (1) formats
+                                let taskIndex: number | null = null;
+
+                                if (typeof task === "number") {
+                                  // If it's a number, use it directly (1-indexed)
+                                  taskIndex = task - 1;
+                                } else {
+                                  // If it's a string, try to extract the number
+                                  const taskStr = String(task);
+                                  const taskMatch =
+                                    taskStr.match(/Task (\d+)/i) || taskStr.match(/(\d+)/);
+                                  taskIndex = taskMatch ? parseInt(taskMatch[1]) - 1 : null;
+                                }
+
+                                const taskDescription =
+                                  taskIndex !== null &&
+                                  taskIndex >= 0 &&
+                                  testData?.testData?.tasks?.[taskIndex]
+                                    ? testData.testData.tasks[taskIndex]
+                                    : null;
+
+                                // Display the task identifier
+                                const displayText =
+                                  typeof task === "number" ? `Task ${task}` : String(task);
+
+                                return (
+                                  <Tooltip key={idx}>
+                                    <TooltipTrigger asChild>
+                                      <Badge variant="outline" className="text-xs cursor-help">
+                                        {displayText}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    {taskDescription && (
+                                      <TooltipContent>
+                                        <p className="max-w-xs">{taskDescription}</p>
+                                      </TooltipContent>
+                                    )}
+                                  </Tooltip>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-
-                    <div className="pt-4 border-t border-border space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold">Manual Override</p>
-                        {finding.validated && (
-                          <Badge
-                            variant={finding.validated === "validated" ? "default" : "secondary"}
-                          >
-                            {finding.validated === "validated" ? "Validated" : "Refuted"}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex gap-2 print:hidden">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleValidation(finding.id, "validated")}
-                          disabled={finding.validated === "validated"}
-                        >
-                          <CheckCircle2 className="h-4 w-4 mr-2" />
-                          Validate
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleValidation(finding.id, "refuted")}
-                          disabled={finding.validated === "refuted"}
-                        >
-                          <XCircle className="h-4 w-4 mr-2" />
-                          Refute
-                        </Button>
-                      </div>
-                      <div className="relative">
-                        <Textarea
-                          placeholder="Add notes about this finding... (Press Cmd/Ctrl + Enter to save)"
-                          className="min-h-20 pr-10"
-                          value={finding.note}
-                          onChange={(e) => handleNoteChange(finding.id, e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                              e.preventDefault();
-                              if (finding.hasUnsavedChanges) {
-                                handleSaveValidation(finding);
-                              }
-                            }
-                          }}
-                        />
-                        {finding.hasUnsavedChanges && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="absolute bottom-2 right-2 h-7 w-7 text-muted-foreground hover:text-foreground"
-                            onClick={() => handleSaveValidation(finding)}
-                            title="Save changes (Cmd/Ctrl + Enter)"
-                          >
-                            <Save className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                      {finding.hasUnsavedChanges && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Press Cmd/Ctrl + Enter to save, or click the save icon
-                        </p>
                       )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+
+                      <div className="pt-4 border-t border-border space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold">Manual Override</p>
+                          {finding.validated && (
+                            <Badge
+                              variant={finding.validated === "validated" ? "default" : "secondary"}
+                            >
+                              {finding.validated === "validated" ? "Validated" : "Refuted"}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex gap-2 print:hidden">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleValidation(finding.id, "validated")}
+                            disabled={finding.validated === "validated"}
+                          >
+                            <CheckCircle2 className="h-4 w-4 mr-2" />
+                            Validate
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleValidation(finding.id, "refuted")}
+                            disabled={finding.validated === "refuted"}
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Refute
+                          </Button>
+                        </div>
+                        <div className="relative">
+                          <Textarea
+                            placeholder="Add notes about this finding... (Press Cmd/Ctrl + Enter to save)"
+                            className="min-h-20 pr-10"
+                            value={finding.note}
+                            onChange={(e) => handleNoteChange(finding.id, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                                e.preventDefault();
+                                if (finding.hasUnsavedChanges) {
+                                  handleSaveValidation(finding);
+                                }
+                              }
+                            }}
+                          />
+                          {finding.hasUnsavedChanges && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="absolute bottom-2 right-2 h-7 w-7 text-muted-foreground hover:text-foreground"
+                              onClick={() => handleSaveValidation(finding)}
+                              title="Save changes (Cmd/Ctrl + Enter)"
+                            >
+                              <Save className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                        {finding.hasUnsavedChanges && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Press Cmd/Ctrl + Enter to save, or click the save icon
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
 
             <Card>

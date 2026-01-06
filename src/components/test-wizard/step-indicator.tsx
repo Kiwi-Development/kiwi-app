@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { cn } from "@/lib/utils";
 
 interface Step {
   number: number;
@@ -8,10 +8,8 @@ interface Step {
 
 const steps: Step[] = [
   { number: 1, title: "Basics" },
-  { number: 2, title: "Persona & Use Case" },
-  { number: 3, title: "Upload Prototype" },
-  { number: 4, title: "Protocol" },
-  { number: 5, title: "Review & Run" },
+  { number: 2, title: "Upload Prototype" },
+  { number: 3, title: "Review & Run" },
 ];
 
 interface StepIndicatorProps {
@@ -20,8 +18,8 @@ interface StepIndicatorProps {
 
 export function StepIndicator({ currentStep }: StepIndicatorProps) {
   return (
-    <nav aria-label="Progress" className="px-6 py-8 bg-card border-b border-border">
-      <ol className="flex items-center justify-between max-w-4xl mx-auto">
+    <nav aria-label="Progress" className="w-full bg-card border-b border-border">
+      <ol className="flex items-center justify-between w-full px-6 py-8">
         {steps.map((step, stepIdx) => (
           <li
             key={step.number}

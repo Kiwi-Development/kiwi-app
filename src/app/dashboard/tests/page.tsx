@@ -34,7 +34,7 @@ import {
   FileText,
   GitCompare,
 } from "lucide-react";
-import { testStore, type Test } from "../../../lib/test-store";
+import { testStore, type Test } from "@/lib/stores";
 import { supabase } from "../../../lib/supabase";
 import {
   AlertDialog,
@@ -193,9 +193,72 @@ export default function TestsPage() {
     }
   };
 
-  const handleRerun = (test: Test) => {
-    // Navigate to the test run page to start a new run
-    router.push(`/dashboard/runs/${test.id}`);
+  const handleRerun = async (test: Test) => {
+    try {
+      // 1. Generate temporary ID and navigate IMMEDIATELY (optimistic navigation)
+      // We'll update the URL once we get the real testRunId
+      const tempTestRunId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      console.log("Rerun: Navigating immediately with temp ID:", tempTestRunId);
+
+      // Store testId in sessionStorage so the runs page can load test data immediately
+      sessionStorage.setItem(`testRun_${tempTestRunId}`, test.id);
+
+      // Navigate IMMEDIATELY - don't wait for anything
+      router.push(`/dashboard/runs/${tempTestRunId}?testId=${test.id}`);
+
+      // 2. Create test run in the background and update URL once we have real ID
+      const requestBody = { testId: test.id };
+      console.log("Rerun: Creating test run with body:", requestBody);
+
+      fetch("/api/test-runs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+            console.error("Rerun: Failed to start test run:", errorData);
+            toast({
+              title: "Error",
+              description: errorData.error || "Failed to start test run",
+              variant: "destructive",
+            });
+            // Navigate back to tests page on error
+            router.push("/dashboard/tests");
+            return;
+          }
+
+          const data = await response.json();
+          const testRunId = data.testRunId;
+
+          if (testRunId && testRunId !== tempTestRunId) {
+            // Replace the URL with the real testRunId
+            console.log("Rerun: Updating URL with real test run ID:", testRunId);
+            router.replace(`/dashboard/runs/${testRunId}`);
+          }
+        })
+        .catch((error) => {
+          console.error("Rerun: Error starting test run:", error);
+          toast({
+            title: "Error",
+            description: error instanceof Error ? error.message : "Failed to start test run",
+            variant: "destructive",
+          });
+          // Navigate back to tests page on error
+          router.push("/dashboard/tests");
+        });
+    } catch (error) {
+      console.error("Rerun: Error in handleRerun:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to start test run. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const calculateSuccessRate = (test: Test): number => {

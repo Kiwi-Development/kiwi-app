@@ -26,8 +26,8 @@ import {
 } from "../../../../components/ui/select";
 import { useToast } from "../../../../hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, GripVertical, Plus, Trash2 } from "lucide-react";
-import { testStore, type Test } from "../../../../lib/test-store";
+import { CheckCircle2, GripVertical, Plus, Trash2, Sparkles, Loader2 } from "lucide-react";
+import { testStore, type Test } from "@/lib/stores";
 import {
   Dialog,
   DialogContent,
@@ -36,7 +36,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../../../../components/ui/dialog";
-import { personaStore, type Persona } from "../../../../lib/persona-store";
+import { personaStore, type Persona } from "@/lib/stores";
 
 function NewTestPageContent() {
   const searchParams = useSearchParams();
@@ -73,6 +73,9 @@ function NewTestPageContent() {
   const [newPersonaFrustrations, setNewPersonaFrustrations] = useState("");
   const [newPersonaConstraints, setNewPersonaConstraints] = useState("");
   const [newPersonaAccessibility, setNewPersonaAccessibility] = useState("");
+  const [aiDescription, setAiDescription] = useState("");
+  const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
+  const [showAiInput, setShowAiInput] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const [selectedPersona, setSelectedPersona] = useState<string>("");
@@ -168,6 +171,7 @@ function NewTestPageContent() {
     let isValid = true;
 
     if (currentStep === 1) {
+      // Step 1: Basics - includes test name, goal, persona, and tasks
       if (!testName.trim()) {
         newErrors.testName = true;
         isValid = false;
@@ -176,12 +180,16 @@ function NewTestPageContent() {
         newErrors.goal = true;
         isValid = false;
       }
-    } else if (currentStep === 2) {
       if (!selectedPersona) {
         newErrors.selectedPersona = true;
         isValid = false;
       }
-    } else if (currentStep === 3) {
+      if (tasks.length === 0) {
+        newErrors.tasks = true;
+        isValid = false;
+      }
+    } else if (currentStep === 2) {
+      // Step 2: Upload Prototype
       if (!prototypeType) {
         newErrors.prototypeType = true;
         isValid = false;
@@ -192,16 +200,11 @@ function NewTestPageContent() {
         newErrors.liveUrl = true;
         isValid = false;
       }
-    } else if (currentStep === 4) {
-      if (tasks.length === 0) {
-        newErrors.tasks = true;
-        isValid = false;
-      }
     }
 
     setErrors(newErrors);
 
-    if (isValid && currentStep < 5) {
+    if (isValid && currentStep < 3) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -249,6 +252,62 @@ function NewTestPageContent() {
     setNewPersonaTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     );
+  };
+
+  const handleGenerateWithAI = async () => {
+    if (!aiDescription.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a description of the persona",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingPersona(true);
+    try {
+      const response = await fetch("/api/personas/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ description: aiDescription }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to generate persona");
+      }
+
+      const personaData = await response.json();
+
+      // Populate form fields with AI-generated data
+      setNewPersonaName(personaData.name || "");
+      setNewPersonaRole(personaData.role || "");
+      setNewPersonaTags(personaData.tags || []);
+      setNewPersonaGoals(personaData.goals?.join("\n") || "");
+      setNewPersonaBehaviors(personaData.behaviors?.join("\n") || "");
+      setNewPersonaFrustrations(personaData.frustrations?.join("\n") || "");
+      setNewPersonaConstraints(personaData.constraints?.join("\n") || "");
+      setNewPersonaAccessibility(personaData.accessibility?.join("\n") || "");
+
+      // Hide AI input and show success
+      setShowAiInput(false);
+      setAiDescription("");
+      toast({
+        title: "Persona generated",
+        description: "AI has filled in the persona details. You can edit them before saving.",
+      });
+    } catch (error) {
+      console.error("Error generating persona:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate persona",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingPersona(false);
+    }
   };
 
   const handleAddTask = () => {
@@ -336,64 +395,154 @@ function NewTestPageContent() {
   };
 
   const handleRunSimulation = async () => {
-    //   if (selectedPersonas.length === 0) {
-    //     toast({
-    //       title: "Error",
-    //       description: "Please select at least one persona",
-    //       variant: "destructive",
-    //     })
-    //     return
-    //   }
-
-    // const selectedPersonaDetails = personaStore.getPersonas()
-    //   .filter(p => selectedPersonas.includes(p.id))
-    //   .map(p => p.name)
-
-    //   if (selectedPersonaDetails.length === 0) {
-    //     toast({
-    //       title: "Error",
-    //       description: "No valid personas selected",
-    //       variant: "destructive",
-    //     })
-    //     return
-    //   }
-
-    const persona = personas.find((p) => p.id === selectedPersona);
-    const newTest = {
-      id: testId || "", // Use existing ID if editing, otherwise will be generated
-      title: testName,
-      status: "running" as const,
-      lastRun: "Just now",
-      personas: persona ? [`${persona.name} / ${persona.role}`] : [],
-      artifactType: prototypeType === "figma" ? "Figma" : "Live URL",
-      createdAt: Date.now(),
-      testData: {
-        testName,
-        goal,
-        selectedPersona,
-        runCount,
-        tasks,
-        figmaUrlA: figmaUrl,
-        liveUrl,
-      },
-      heuristics,
-    };
-
-    const savedTest = await testStore.saveTest(newTest);
-    if (!savedTest) {
+    // Validate required fields
+    if (!testName.trim()) {
       toast({
         title: "Error",
-        description: "Failed to save test",
+        description: "Please enter a test name",
         variant: "destructive",
       });
       return;
     }
 
-    toast({
-      title: "Simulation started",
-      description: "Running test with 3 persona variants",
-    });
-    router.push(`/dashboard/runs/${savedTest.id}`);
+    if (!selectedPersona) {
+      toast({
+        title: "Error",
+        description: "Please select a persona",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (tasks.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one task",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!prototypeType || (prototypeType === "figma" && !figmaUrl.trim()) || (prototypeType === "live" && !liveUrl.trim())) {
+      toast({
+        title: "Error",
+        description: "Please provide a prototype URL",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // 1. Save the test first
+      const persona = personas.find((p) => p.id === selectedPersona);
+      const newTest = {
+        id: testId || "", // Use existing ID if editing, otherwise will be generated
+        title: testName,
+        status: "draft" as const, // Save as draft initially
+        lastRun: "Never",
+        personas: persona ? [`${persona.name} / ${persona.role}`] : [],
+        artifactType: prototypeType === "figma" ? "Figma" : "Live URL",
+        createdAt: Date.now(),
+        testData: {
+          testName,
+          goal,
+          selectedPersona,
+          runCount,
+          tasks,
+          figmaUrlA: figmaUrl,
+          liveUrl,
+        },
+        heuristics,
+      };
+
+      const savedTest = await testStore.saveTest(newTest);
+      if (!savedTest || !savedTest.id) {
+        toast({
+          title: "Error",
+          description: "Failed to save test or test ID is missing",
+          variant: "destructive",
+        });
+        console.error("Saved test:", savedTest);
+        return;
+      }
+
+      // Validate test ID is a valid UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(savedTest.id)) {
+        toast({
+          title: "Error",
+          description: `Invalid test ID: ${savedTest.id}. Please try saving the test again.`,
+          variant: "destructive",
+        });
+        console.error("Invalid test ID format:", savedTest.id);
+        return;
+      }
+
+      console.log("Saved test ID:", savedTest.id);
+
+      // 2. Generate temporary ID and navigate IMMEDIATELY (optimistic navigation)
+      // We'll update the URL once we get the real testRunId
+      const tempTestRunId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      console.log("Navigating immediately with temp ID:", tempTestRunId);
+      
+      // Store testId in sessionStorage so the runs page can load test data immediately
+      sessionStorage.setItem(`testRun_${tempTestRunId}`, savedTest.id);
+      
+      // Navigate IMMEDIATELY - don't wait for anything
+      router.push(`/dashboard/runs/${tempTestRunId}?testId=${savedTest.id}`);
+
+      // 3. Create test run in the background and update URL once we have real ID
+      const requestBody = { testId: savedTest.id };
+      console.log("Creating test run with body:", requestBody);
+
+      fetch("/api/test-runs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+            console.error("Failed to start test run:", errorData);
+            toast({
+              title: "Error",
+              description: errorData.error || "Failed to start test run",
+              variant: "destructive",
+            });
+            // Navigate back to tests page on error
+            router.push("/dashboard/tests");
+            return;
+          }
+
+          const data = await response.json();
+          const testRunId = data.testRunId;
+
+          if (testRunId && testRunId !== tempTestRunId) {
+            // Replace the URL with the real testRunId
+            console.log("Updating URL with real test run ID:", testRunId);
+            router.replace(`/dashboard/runs/${testRunId}`);
+          }
+        })
+        .catch((error) => {
+          console.error("Error starting test run:", error);
+          toast({
+            title: "Error",
+            description: error instanceof Error ? error.message : "Failed to start test run",
+            variant: "destructive",
+          });
+          // Navigate back to tests page on error
+          router.push("/dashboard/tests");
+        });
+    } catch (error) {
+      console.error("Error starting test run:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to start test run. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getMutationDescription = (level: number) => {
@@ -412,41 +561,39 @@ function NewTestPageContent() {
 
       <main className="container mx-auto p-6 max-w-4xl">
         {currentStep === 1 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Test Basics</CardTitle>
-              <CardDescription>
-                Set up the fundamental details of your usability test
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="testName">Test Name *</Label>
-                <Input
-                  id="testName"
-                  value={testName}
-                  onChange={(e) => setTestName(e.target.value)}
-                  placeholder="e.g., Evaluations Page Design B"
-                  className={errors.testName ? "border-red-500" : ""}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="goal">Goal *</Label>
-                <Textarea
-                  id="goal"
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
-                  placeholder="What decision will this inform?"
-                  className={`min-h-24 ${errors.goal ? "border-red-500" : ""}`}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {currentStep === 2 && (
           <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Test Basics</CardTitle>
+                <CardDescription>
+                  Set up the fundamental details of your usability test
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="testName">Test Name *</Label>
+                  <Input
+                    id="testName"
+                    value={testName}
+                    onChange={(e) => setTestName(e.target.value)}
+                    placeholder="e.g., Evaluations Page Design B"
+                    className={errors.testName ? "border-red-500" : ""}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="goal">Goal *</Label>
+                  <Textarea
+                    id="goal"
+                    value={goal}
+                    onChange={(e) => setGoal(e.target.value)}
+                    placeholder="What decision will this inform?"
+                    className={`min-h-24 ${errors.goal ? "border-red-500" : ""}`}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Persona & Use Case</CardTitle>
@@ -504,6 +651,7 @@ function NewTestPageContent() {
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     New Persona
+                    <Sparkles className="h-4 w-4 ml-2 text-primary" />
                   </Button>
                 </div>
 
@@ -551,6 +699,57 @@ function NewTestPageContent() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
+                    {/* AI Generation Section */}
+                    <div className="space-y-3 p-4 rounded-lg border border-primary/20 bg-primary/5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-primary" />
+                          <Label className="text-sm font-medium">
+                            Generate with AI
+                          </Label>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setShowAiInput(!showAiInput);
+                            if (showAiInput) {
+                              setAiDescription("");
+                            }
+                          }}
+                        >
+                          {showAiInput ? "Cancel" : "Try AI"}
+                        </Button>
+                      </div>
+                      {showAiInput && (
+                        <div className="space-y-2">
+                          <Textarea
+                            placeholder="Describe your persona in natural language... e.g., 'A busy marketing manager in their 30s who needs to quickly book flights for business trips. They're price-conscious, use mobile devices frequently, and get frustrated by hidden fees.'"
+                            value={aiDescription}
+                            onChange={(e) => setAiDescription(e.target.value)}
+                            className="min-h-[100px]"
+                            disabled={isGeneratingPersona}
+                          />
+                          <Button
+                            onClick={handleGenerateWithAI}
+                            disabled={isGeneratingPersona || !aiDescription.trim()}
+                            className="w-full"
+                          >
+                            {isGeneratingPersona ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4 mr-2" />
+                                Generate Persona
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="persona-name">Name *</Label>
                       <Input
@@ -651,6 +850,8 @@ function NewTestPageContent() {
                         setNewPersonaFrustrations("");
                         setNewPersonaConstraints("");
                         setNewPersonaAccessibility("");
+                        setAiDescription("");
+                        setShowAiInput(false);
                       }}
                     >
                       Cancel
@@ -690,6 +891,8 @@ function NewTestPageContent() {
                           setNewPersonaFrustrations("");
                           setNewPersonaConstraints("");
                           setNewPersonaAccessibility("");
+                          setAiDescription("");
+                          setShowAiInput(false);
                           toast({
                             title: "Persona created",
                             description: `${newPersonaName} has been added`,
@@ -709,108 +912,7 @@ function NewTestPageContent() {
                 </DialogContent>
               </Dialog>
             </Card>
-          </div>
-        )}
 
-        {currentStep === 3 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Prototype</CardTitle>
-              <CardDescription>Add a prototype to test</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {!prototypeType && (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Choose how you&apos;d like to add your prototype *
-                  </p>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Button
-                      variant="outline"
-                      className={`h-24 flex flex-col gap-2 bg-transparent ${errors.prototypeType ? "border-red-500" : ""}`}
-                      onClick={() => setPrototypeType("live")}
-                    >
-                      <span className="font-semibold">Live URL</span>
-                      <span className="text-xs text-muted-foreground">Test a deployed website</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className={`h-24 flex flex-col gap-2 bg-transparent ${errors.prototypeType ? "border-red-500" : ""}`}
-                      onClick={() => setPrototypeType("figma")}
-                    >
-                      <span className="font-semibold">Figma</span>
-                      <span className="text-xs text-muted-foreground">Import Figma prototype</span>
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {prototypeType === "figma" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label>Figma Prototype</Label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setPrototypeType("");
-                        setFigmaUrl("");
-                        setFigmaUrl("");
-                      }}
-                    >
-                      Change
-                    </Button>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="figmaUrl">Figma Prototype URL *</Label>
-                    <Input
-                      id="figmaUrl"
-                      value={figmaUrl}
-                      onChange={(e) => {
-                        const url = e.target.value.replace("&show-proto-sidebar=1", "");
-                        setFigmaUrl(url);
-                      }}
-                      placeholder="https://www.figma.com/proto/..."
-                      className={errors.figmaUrl ? "border-red-500" : ""}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {prototypeType === "live" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label>Live URL</Label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setPrototypeType("");
-                        setLiveUrl("");
-                        setLiveUrl("");
-                      }}
-                    >
-                      Change
-                    </Button>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="liveUrl">Website URL *</Label>
-                    <Input
-                      id="liveUrl"
-                      value={liveUrl}
-                      onChange={(e) => setLiveUrl(e.target.value)}
-                      placeholder="https://example.com"
-                      className={errors.liveUrl ? "border-red-500" : ""}
-                    />
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {currentStep === 4 && (
-          <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Tasks *</CardTitle>
@@ -978,7 +1080,104 @@ function NewTestPageContent() {
           </div>
         )}
 
-        {currentStep === 5 && (
+        {currentStep === 2 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Prototype</CardTitle>
+              <CardDescription>Add a prototype to test</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {!prototypeType && (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Choose how you&apos;d like to add your prototype *
+                  </p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Button
+                      variant="outline"
+                      className={`h-24 flex flex-col gap-2 bg-transparent ${errors.prototypeType ? "border-red-500" : ""}`}
+                      onClick={() => setPrototypeType("live")}
+                    >
+                      <span className="font-semibold">Live URL</span>
+                      <span className="text-xs text-muted-foreground">Test a deployed website</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className={`h-24 flex flex-col gap-2 bg-transparent ${errors.prototypeType ? "border-red-500" : ""}`}
+                      onClick={() => setPrototypeType("figma")}
+                    >
+                      <span className="font-semibold">Figma</span>
+                      <span className="text-xs text-muted-foreground">Import Figma prototype</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {prototypeType === "figma" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label>Figma Prototype</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPrototypeType("");
+                        setFigmaUrl("");
+                        setFigmaUrl("");
+                      }}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="figmaUrl">Figma Prototype URL *</Label>
+                    <Input
+                      id="figmaUrl"
+                      value={figmaUrl}
+                      onChange={(e) => {
+                        const url = e.target.value.replace("&show-proto-sidebar=1", "");
+                        setFigmaUrl(url);
+                      }}
+                      placeholder="https://www.figma.com/proto/..."
+                      className={errors.figmaUrl ? "border-red-500" : ""}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {prototypeType === "live" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label>Live URL</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPrototypeType("");
+                        setLiveUrl("");
+                        setLiveUrl("");
+                      }}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="liveUrl">Website URL *</Label>
+                    <Input
+                      id="liveUrl"
+                      value={liveUrl}
+                      onChange={(e) => setLiveUrl(e.target.value)}
+                      placeholder="https://example.com"
+                      className={errors.liveUrl ? "border-red-500" : ""}
+                    />
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {currentStep === 3 && (
           <Card>
             <CardHeader>
               <CardTitle>Review & Run</CardTitle>
@@ -1090,7 +1289,7 @@ function NewTestPageContent() {
           <Button onClick={handleBack} variant="outline">
             Back
           </Button>
-          {currentStep < 5 && <Button onClick={handleNext}>Next</Button>}
+          {currentStep < 3 && <Button onClick={handleNext}>Next</Button>}
         </div>
       </main>
     </AppLayout>

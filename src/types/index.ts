@@ -45,14 +45,12 @@ export type {
 // Knowledge types
 export type { KnowledgeCategory, KnowledgeChunkMetadata, KnowledgeChunk } from "./knowledge";
 
-// API types
-export type {
-  SessionStartResponse,
-  ScreenshotResponse,
-  ClickResponse,
-  ExtractContextResponse,
-  FigmaMetadataResponse,
-} from "./api";
+// API types (deprecated - no longer used with Stagehand v3)
+// export type {
+//   SessionStartResponse,
+//   ScreenshotResponse,
+//   ClickResponse,
+// } from "./api";
 
 // Database types
 export type { FeedbackEntryRow, TestRunRow, KnowledgeChunkRow } from "./database";

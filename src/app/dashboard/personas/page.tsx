@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "../../../components/ui/table";
 import { Badge } from "../../../components/ui/badge";
-import { Plus, Trash2, Users } from "lucide-react";
+import { Plus, Trash2, Users, Sparkles, Loader2 } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { Textarea } from "../../../components/ui/textarea";
 import { Label } from "../../../components/ui/label";
@@ -26,7 +26,7 @@ import {
   DialogTrigger,
 } from "../../../components/ui/dialog";
 import { useToast } from "../../../hooks/use-toast";
-import { personaStore, type Persona } from "../../../lib/persona-store";
+import { personaStore, type Persona } from "@/lib/stores";
 
 export default function PersonasPage() {
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -40,6 +40,9 @@ export default function PersonasPage() {
   const [newPersonaFrustrations, setNewPersonaFrustrations] = useState("");
   const [newPersonaConstraints, setNewPersonaConstraints] = useState("");
   const [newPersonaAccessibility, setNewPersonaAccessibility] = useState("");
+  const [aiDescription, setAiDescription] = useState("");
+  const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
+  const [showAiInput, setShowAiInput] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -154,6 +157,62 @@ export default function PersonasPage() {
     );
   };
 
+  const handleGenerateWithAI = async () => {
+    if (!aiDescription.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a description of the persona",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingPersona(true);
+    try {
+      const response = await fetch("/api/personas/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ description: aiDescription }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to generate persona");
+      }
+
+      const personaData = await response.json();
+
+      // Populate form fields with AI-generated data
+      setNewPersonaName(personaData.name || "");
+      setNewPersonaRole(personaData.role || "");
+      setNewPersonaTags(personaData.tags || []);
+      setNewPersonaGoals(personaData.goals?.join("\n") || "");
+      setNewPersonaBehaviors(personaData.behaviors?.join("\n") || "");
+      setNewPersonaFrustrations(personaData.frustrations?.join("\n") || "");
+      setNewPersonaConstraints(personaData.constraints?.join("\n") || "");
+      setNewPersonaAccessibility(personaData.accessibility?.join("\n") || "");
+
+      // Hide AI input and show success
+      setShowAiInput(false);
+      setAiDescription("");
+      toast({
+        title: "Persona generated",
+        description: "AI has filled in the persona details. You can edit them before saving.",
+      });
+    } catch (error) {
+      console.error("Error generating persona:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate persona",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingPersona(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <AppLayout>
@@ -179,12 +238,15 @@ export default function PersonasPage() {
                   setNewPersonaConstraints("");
                   setNewPersonaAccessibility("");
                   setEditingPersona(null);
+                  setAiDescription("");
+                  setShowAiInput(false);
                 }
               }}
             >
               <DialogTrigger asChild>
-                <Button size="lg">
-                  <Plus className="h-4 w-4 mr-2" />
+                <Button size="default">
+                  <Plus className="h-4 w-4" />
+                  <Sparkles className="h-4 w-4 mr-2 text-primary" />
                   New Persona
                 </Button>
               </DialogTrigger>
@@ -199,6 +261,57 @@ export default function PersonasPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
+                  {/* AI Generation Section */}
+                  {!editingPersona && (
+                    <div className="space-y-3 p-4 rounded-lg border border-primary/20 bg-primary/5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-primary" />
+                          <Label className="text-sm font-medium">Generate with AI</Label>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setShowAiInput(!showAiInput);
+                            if (showAiInput) {
+                              setAiDescription("");
+                            }
+                          }}
+                        >
+                          {showAiInput ? "Cancel" : "Try AI"}
+                        </Button>
+                      </div>
+                      {showAiInput && (
+                        <div className="space-y-2">
+                          <Textarea
+                            placeholder="Describe your persona in natural language... e.g., 'A busy marketing manager in their 30s who needs to quickly book flights for business trips. They're price-conscious, use mobile devices frequently, and get frustrated by hidden fees.'"
+                            value={aiDescription}
+                            onChange={(e) => setAiDescription(e.target.value)}
+                            className="min-h-[100px]"
+                            disabled={isGeneratingPersona}
+                          />
+                          <Button
+                            onClick={handleGenerateWithAI}
+                            disabled={isGeneratingPersona || !aiDescription.trim()}
+                            className="w-full"
+                          >
+                            {isGeneratingPersona ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4 mr-2" />
+                                Generate Persona
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="persona-name">Name *</Label>
                     <Input

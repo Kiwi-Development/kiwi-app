@@ -6,13 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "dev:all": "bash scripts/start-all.sh",
-    "setup": "npm install && cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt && playwright install",
     "check": "tsc --noEmit && eslint . && prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "fix": "eslint . --fix && prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "ingest-knowledge": "tsx scripts/ingest-knowledge.ts"
+    "migrate-db": "bash scripts/migrate-db.sh"
   },
   "dependencies": {
+    "@browserbasehq/sdk": "^2.6.0",
+    "@browserbasehq/stagehand": "^3.0.7",
     "@calcom/embed-react": "^1.5.3",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -60,6 +60,8 @@
     "react-hook-form": "^7.66.0",
     "react-resizable-panels": "^3.0.6",
     "recharts": "^3.4.1",
+    "rrweb": "^2.0.0-alpha.4",
+    "rrweb-player": "^1.0.0-alpha.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
@@ -82,7 +84,7 @@
     "prettier": "^3.4.2",
     "supabase": "^2.58.5",
     "tailwindcss": "^4.1.17",
-    "tsx": "^4.19.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

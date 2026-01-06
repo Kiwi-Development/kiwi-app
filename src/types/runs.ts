@@ -1,4 +1,4 @@
-export type RunStatus = "queued" | "running" | "completed" | "needs-validation" | "error";
+export type RunStatus = "queued" | "running" | "completed" | "needs-validation" | "error" | "incomplete" | "cancelled";
 
 export type RunEventType =
   | "click"

@@ -36,7 +36,7 @@ export type LiveRunState = {
   duration?: number; // seconds (use video duration when known)
   personas: PersonaProgress[];
   events: RunEvent[]; // append-only, sorted by `t`
-  logs: { t: number; text: string }[]; // append-only
+  logs: { t: number; text: string; type?: 'reasoning' | 'action' }[]; // append-only
   steps: { index: number; title: string; pass?: boolean; duration?: number }[];
   tags: { id: string; t: number; tag: string }[]; // e.g., Success Step, Error State
   consoleTrace: unknown[]; // raw JSON chunks to render

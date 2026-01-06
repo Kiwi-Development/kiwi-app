@@ -1,77 +1,70 @@
-# 🥝 Scripts
+# Scripts
 
-This folder contains helper scripts for Kiwi development and deployment.
+Utility scripts for development and database management.
 
 ## Available Scripts
 
-### Development Scripts
-
-#### Start Frontend (Mac/Linux)
+### Database Migration
 
 ```bash
-./scripts/start-frontend.sh
+npm run migrate-db
 # or
+./scripts/migrate-db.sh
+```
+
+Runs Supabase database migrations. This script applies all pending migrations from the `supabase/migrations/` directory.
+
+**Requirements:**
+
+- Supabase CLI installed (`npm install -g supabase`)
+- Supabase project linked (`supabase link --project-ref your-project-ref`)
+- Or manually run SQL from `supabase/migrations/add_browserbase_session_id.sql` in Supabase dashboard
+
+## Running Services
+
+### Frontend (Next.js)
+
+```bash
 npm run dev
 ```
 
-#### Start Backend (Mac/Linux)
+Starts the Next.js development server on `http://localhost:3000`.
+
+### Test Runner Service
 
 ```bash
-./scripts/start-backend.sh
+cd services/test-runner
+npm run dev
 ```
 
-#### Start Both (Mac/Linux)
+Starts the test runner service on `http://localhost:3001`.
 
-```bash
-./scripts/start-all.sh
-# or
-npm run dev:all
-```
+See `services/test-runner/README.md` for more information about the test runner service.
 
-### Windows Scripts
+## Deprecated Scripts
 
-For Windows users, use the `.bat` files:
+The following scripts have been removed as part of the migration to a services architecture:
 
-```cmd
-scripts\start-frontend.bat
-scripts\start-backend.bat
-scripts\start-all.bat
-```
+- `start-backend.sh` / `start-backend.bat` - Backend service moved to `services/test-runner/`
+- `start-frontend.sh` / `start-frontend.bat` - Use `npm run dev` instead
+- `start-all.sh` / `start-all.bat` - Services run independently now
+- `ingest-knowledge.ts` - Knowledge ingestion moved to `services/test-runner/`
 
-## What Each Script Does
+## Development Workflow
 
-### `start-backend.sh`
+1. **Start the test runner service** (Terminal 1):
 
-- Activates Python virtual environment
-- Checks for dependencies
-- Installs dependencies if missing
-- Starts FastAPI server on port 5001
+   ```bash
+   cd services/test-runner
+   npm run dev
+   ```
 
-### `start-frontend.sh`
+2. **Start the frontend** (Terminal 2):
 
-- Checks for node_modules
-- Installs dependencies if missing
-- Starts Next.js dev server on port 3000
+   ```bash
+   npm run dev
+   ```
 
-### `start-all.sh`
-
-- Starts both frontend and backend
-- Runs them in background processes
-- Shows URLs for both servers
-- Handles cleanup on Ctrl+C
-
-## NPM Scripts
-
-The following npm scripts are available:
-
-- `npm run dev` - Start frontend only
-- `npm run dev:all` - Start both servers (Mac/Linux)
-- `npm run setup` - Full setup (installs all dependencies)
-- `npm run check` - Run all code quality checks (TypeScript, ESLint, Prettier)
-- `npm run fix` - Auto-fix linting and formatting issues
-
-## Notes
-
-- On Windows, use the `.bat` files directly or run the Python/Node commands manually
-- The scripts automatically check for dependencies and install them if missing
-- Make sure you have `.env.local` configured before starting
+3. **Access the application**:
+   - Frontend: http://localhost:3000
+   - Test Runner API: http://localhost:3001
