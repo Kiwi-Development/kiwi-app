@@ -117,7 +117,7 @@ Persona context: ${persona.name}, ${persona.role}`;
 /**
  * Format agent result message as first-person persona explanation
  */
-export function formatPersonaExplanation(message: string | unknown, persona: Persona): string {
+export function formatPersonaExplanation(message: string | unknown, _persona: Persona): string {
   // Convert message to string if it's not already
   let messageStr: string;
   if (typeof message === "string") {

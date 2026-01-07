@@ -57,10 +57,8 @@ export function loadConfig(): EnvConfig {
     },
     model: {
       name: getEnvVar("MODEL_NAME"),
-      // For Google models, use GOOGLE_GENERATIVE_AI_API_KEY or MODEL_API_KEY
-      apiKey: getEnvVar("GOOGLE_GENERATIVE_AI_API_KEY", false) || 
-              getEnvVar("MODEL_API_KEY", false) || 
-              undefined,
+      // API key for the model (e.g., Google Gemini, OpenAI, etc.)
+      apiKey: getEnvVar("MODEL_API_KEY", false) || undefined,
     },
     supabase: {
       url: getEnvVar("SUPABASE_URL"),

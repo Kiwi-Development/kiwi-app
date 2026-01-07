@@ -37,8 +37,6 @@ BROWSERBASE_PROJECT_ID=your_browserbase_project_id
 # AI Models
 MODEL_NAME=google/gemini-3-pro-preview
 MODEL_API_KEY=your_google_gemini_api_key
-# Or use GOOGLE_GENERATIVE_AI_API_KEY (Stagehand's preferred env var)
-GOOGLE_GENERATIVE_AI_API_KEY=your_google_gemini_api_key
 
 # OpenAI (for task rephrasing and persona generation)
 OPENAI_API_KEY=your_openai_api_key
@@ -245,8 +243,7 @@ docker run -p 3001:3001 --env-file .env test-runner
 | `BROWSERBASE_API_KEY` | Yes | Browserbase API key |
 | `BROWSERBASE_PROJECT_ID` | Yes | Browserbase project ID |
 | `MODEL_NAME` | Yes | Model name for Stagehand (e.g., `google/gemini-3-pro-preview`) |
-| `MODEL_API_KEY` | Yes* | API key for the model (*or use `GOOGLE_GENERATIVE_AI_API_KEY`) |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Yes* | Google Gemini API key (Stagehand's preferred env var) |
+| `MODEL_API_KEY` | Yes | API key for the model (e.g., Google Gemini, OpenAI, etc.) |
 | `OPENAI_API_KEY` | Yes | OpenAI API key (for task rephrasing and persona generation) |
 | `REDIS_URL` | No | Redis connection URL (for production job queue) |
 | `PORT` | No | Server port (default: `3001`) |

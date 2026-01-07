@@ -92,22 +92,22 @@ export default function LiveRunPage() {
           try {
             const test = await testStore.getTestById(testIdFromStorage);
             if (test) {
-              const steps =
-                test.testData?.tasks?.map((task, index) => ({
-                  index,
-                  title: task,
-                })) || [];
+          const steps =
+            test.testData?.tasks?.map((task, index) => ({
+              index,
+              title: task,
+            })) || [];
 
               setState((prev) => ({
                 ...prev,
                 runId: testRunId,
-                title: test.title,
+            title: test.title,
                 status: "queued", // Assume queued while waiting
                 startedAt: Date.now(),
-                steps,
+            steps,
               }));
             }
-          } catch (error) {
+      } catch (error) {
             console.error("Error loading test data:", error);
           }
         }
@@ -220,8 +220,8 @@ export default function LiveRunPage() {
                     testRun.status === "completed" ? 100 : testRun.status === "running" ? 50 : 0,
                 },
               ];
-            }
-          } catch (error) {
+        }
+      } catch (error) {
             console.error("Error loading persona:", error);
           }
         }
@@ -251,11 +251,11 @@ export default function LiveRunPage() {
           setSessionReady(true); // Session is ready if we have the ID
         }
       } catch (error) {
-        toast({
+      toast({
           title: "Error loading test run",
           description: error instanceof Error ? error.message : "Unknown error",
-          variant: "destructive",
-        });
+        variant: "destructive",
+      });
       }
     };
 
@@ -283,17 +283,17 @@ export default function LiveRunPage() {
             setSessionReady(true);
           }
           // Add technical log
-          setState((prev) => ({
-            ...prev,
-            consoleTrace: [
-              ...prev.consoleTrace,
-              {
+        setState((prev) => ({
+          ...prev,
+          consoleTrace: [
+            ...prev.consoleTrace,
+            {
                 type: "session_created",
                 sessionId: sessionData.browserbaseSessionId,
-                timestamp: new Date().toISOString(),
-              },
-            ],
-          }));
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        }));
           break;
 
         case "progress":
@@ -345,34 +345,34 @@ export default function LiveRunPage() {
             }
 
             return {
-              ...prev,
+          ...prev,
               status: progressData.status as LiveRunState["status"],
               personas: updatedPersonas,
-              consoleTrace: [
-                ...prev.consoleTrace,
-                {
+          consoleTrace: [
+            ...prev.consoleTrace,
+            {
                   type: "log",
                   message: `Task ${progressData.currentTask}/${progressData.totalTasks}: ${progressData.status}`,
-                  timestamp: new Date().toISOString(),
-                },
-              ],
+              timestamp: new Date().toISOString(),
+            },
+          ],
             };
           });
           break;
 
         case "persona_message":
           const personaData = event.data as { message: string; timestamp: string };
-          setState((prev) => ({
-            ...prev,
+        setState((prev) => ({
+          ...prev,
             logs: [
               ...prev.logs,
               {
                 t: Date.now() - (prev.startedAt || Date.now()),
                 text: personaData.message,
                 type: "reasoning" as const,
-              },
-            ],
-          }));
+            },
+          ],
+        }));
           break;
 
         case "event":
@@ -384,8 +384,8 @@ export default function LiveRunPage() {
             stepIndex?: number;
             t: number;
           };
-          setState((prev) => ({
-            ...prev,
+        setState((prev) => ({
+          ...prev,
             events: [
               ...prev.events,
               {
@@ -395,9 +395,9 @@ export default function LiveRunPage() {
                 details: eventData.details,
                 stepIndex: eventData.stepIndex,
                 t: eventData.t > 1000000 ? eventData.t / 1000 : eventData.t, // Convert to seconds if in milliseconds
-              },
-            ],
-          }));
+            },
+          ],
+        }));
           break;
 
         case "completed":
@@ -418,8 +418,8 @@ export default function LiveRunPage() {
               pass: metrics && index < metrics.completedTasks ? true : false,
             }));
             return {
-              ...prev,
-              status: "completed" as const,
+        ...prev,
+        status: "completed" as const,
               duration: metrics ? Math.round(metrics.duration / 1000) : prev.duration,
               steps: updatedSteps,
             };
@@ -441,13 +441,13 @@ export default function LiveRunPage() {
                 })
                 .catch((err) => console.error("Error fetching test run for navigation:", err));
             }
-          }, 2000);
+      }, 2000);
           break;
 
         case "incomplete":
         case "error":
-          setState((prev) => ({
-            ...prev,
+        setState((prev) => ({
+          ...prev,
             status: event.type as LiveRunState["status"],
           }));
           break;
@@ -457,8 +457,8 @@ export default function LiveRunPage() {
             ...prev,
             status: "cancelled" as const,
           }));
-          break;
-      }
+            break;
+          }
     },
     [testRunId, router, testId]
   );
@@ -476,7 +476,7 @@ export default function LiveRunPage() {
     setIsCancelling(true);
     try {
       const response = await fetch(`/api/test-runs/${testRunId}/cancel`, {
-        method: "POST",
+            method: "POST",
       });
 
       if (!response.ok) {
@@ -490,12 +490,12 @@ export default function LiveRunPage() {
 
       setCancelDialogOpen(false);
       router.push("/dashboard/tests");
-    } catch (error) {
-      toast({
+        } catch (error) {
+        toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to cancel test run",
-        variant: "destructive",
-      });
+          variant: "destructive",
+        });
     } finally {
       setIsCancelling(false);
     }
@@ -536,7 +536,7 @@ export default function LiveRunPage() {
     // Show event details in a toast
     import("../../../../lib/utils/time-format")
       .then(({ formatTimeStandard }) => {
-        toast({
+    toast({
           title: event.label,
           description: event.details || `Event occurred at ${formatTimeStandard(event.t)}`,
         });
@@ -547,7 +547,7 @@ export default function LiveRunPage() {
           title: event.label,
           description: event.details || "Event occurred",
         });
-      });
+    });
   };
 
   return (
@@ -575,10 +575,10 @@ export default function LiveRunPage() {
                     Cancel
                   </Button>
                 )}
-                <Button variant="outline" onClick={handleShare}>
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share
-                </Button>
+              <Button variant="outline" onClick={handleShare}>
+                <Share2 className="h-4 w-4 mr-2" />
+                Share
+              </Button>
               </div>
             </div>
 
@@ -597,8 +597,8 @@ export default function LiveRunPage() {
                               animation: "flash-red-white 1s ease-in-out infinite",
                             }}
                           >
-                            LIVE
-                          </Badge>
+                                LIVE
+                              </Badge>
                         )}
                         <style jsx>{`
                           @keyframes flash-red-white {
@@ -613,7 +613,7 @@ export default function LiveRunPage() {
                             }
                           }
                         `}</style>
-                      </div>
+                        </div>
                     </CardHeader>
                     <CardContent>
                       <LiveBrowserView sessionReady={sessionReady} liveViewUrl={liveViewUrl} />

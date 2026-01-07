@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: kiwi-test-runner
+    env: docker
+    rootDir: services/test-runner
+    plan: starter # Change to 'free' for development
+    envVars:
+      - key: BROWSERBASE_API_KEY
+        sync: false
+      - key: BROWSERBASE_PROJECT_ID
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MODEL_NAME
+        value: google/gemini-3-pro-preview
+      - key: MODEL_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        sync: false
+      - key: PORT
+        value: 3001
+      - key: NODE_ENV
+        value: production
+      - key: MAX_CONCURRENT_RUNS
+        value: 5
+      - key: FRONTEND_URL
+        sync: false
+      # Optional: Redis configuration (uncomment if using Render Redis)
+      # - key: REDIS_URL
+      #   fromService:
+      #     type: redis
+      #     name: kiwi-redis
+      #     property: connectionString
+
+# Optional: Redis service (uncomment if needed)
+# redis:
+#   - name: kiwi-redis
+#     plan: starter
+#     maxmemoryPolicy: allkeys-lru
+

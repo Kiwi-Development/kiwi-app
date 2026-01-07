@@ -18,9 +18,9 @@ RUN npm prune --production
 # Expose port
 EXPOSE 3001
 
-# Health check
+# Health check (PORT env var is provided by Render)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3001) + '/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Start server
 CMD ["node", "dist/index.js"]
