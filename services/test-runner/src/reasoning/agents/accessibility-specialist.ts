@@ -7,8 +7,8 @@
 import { OpenAI } from "openai";
 import type { AgentContext, AgentFinding } from "../types.js";
 import { retrieveKnowledgeForIssue } from "../../knowledge-base/retrieval.js";
-import { formatContextForAgent } from "../orchestrator";
-import { mapConfidenceToLevel } from "../evidence-capture";
+import { formatContextForAgent } from "../orchestrator.js";
+import { mapConfidenceToLevel } from "../evidence-capture.js";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,

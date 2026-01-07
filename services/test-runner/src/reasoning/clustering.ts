@@ -4,7 +4,7 @@
  * Groups similar findings across personas/tasks to avoid duplicates
  */
 
-import { AgentFinding, EvidenceSnippet } from "./orchestrator";
+import { AgentFinding, EvidenceSnippet } from "./orchestrator.js";
 // Note: Embeddings removed - using simple string similarity for client-side clustering
 // OpenAI API key is not available on client side (and shouldn't be exposed via NEXT_PUBLIC_)
 

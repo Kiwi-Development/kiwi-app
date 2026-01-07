@@ -4,7 +4,7 @@
  * Synthesizes findings from multiple agents, prioritizes issues, and validates findings
  */
 
-import { AgentFinding } from "./orchestrator";
+import { AgentFinding } from "./orchestrator.js";
 
 export interface SynthesisResult {
   allFindings: AgentFinding[];
